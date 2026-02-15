@@ -1,36 +1,46 @@
 const db = require("../config/db");
 
 // exports.createLead = (req, res) => {
+
 //    const { name, phone, email, source, status, assigned_to } = req.body;
+
+//    // 🔥 Admin assign manually
+//    // 🔥 Staff auto assign to himself
+//    const assignedUser =
+//       req.user.role === "admin"
+//          ? assigned_to || null
+//          : req.user.id;
 
 //    db.query(
 //       "INSERT INTO leads (name,phone,email,source,status,assigned_to) VALUES (?,?,?,?,?,?)",
-//       [name, phone, email, source, status, assigned_to || null],
-//       (err, result) => {
+//       [name, phone, email, source, status, assignedUser],
+//       (err) => {
 //          if (err) return res.status(500).json(err);
 
 //          res.json({ message: "Lead created successfully" });
-//       },
+//       }
 //    );
 // };
 
-exports.createLead = (req, res) => {
 
+exports.createLead = (req, res) => {
    const { name, phone, email, source, status, assigned_to } = req.body;
 
-   // 🔥 Admin assign manually
-   // 🔥 Staff auto assign to himself
-   const assignedUser =
-      req.user.role === "admin"
-         ? assigned_to || null
-         : req.user.id;
+   let assignUserId;
+
+   if (req.user.role === "admin") {
+      // Admin can assign manually
+      assignUserId = assigned_to || null;
+   } else {
+      // Staff auto assign to self
+      assignUserId = req.user.id;
+   }
 
    db.query(
       "INSERT INTO leads (name,phone,email,source,status,assigned_to) VALUES (?,?,?,?,?,?)",
-      [name, phone, email, source, status, assignedUser],
-      (err) => {
+      [name, phone, email, source, status || "New", assignUserId],
+      (err, result) => {
          if (err) return res.status(500).json(err);
-
          res.json({ message: "Lead created successfully" });
       }
    );
@@ -100,71 +110,107 @@ exports.getLeads = (req, res) => {
 };
 
 
-
-
-
 // exports.updateLead = (req, res) => {
+
 //    const { id } = req.params;
 //    const { name, phone, email, source, status, assigned_to } = req.body;
 
-//    db.query(
-//       `UPDATE leads 
-//      SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? 
-//      WHERE id=?`,
-//       [name, phone, email, source, status, assigned_to, id],
-//       (err) => {
-//          if (err) return res.status(500).json(err);
-//          res.json({ message: "Lead updated successfully" });
-//       }
-//    );
+//    // 🔥 If not admin, check ownership
+//    if (req.user.role !== "admin") {
+
+//       db.query(
+//          "SELECT * FROM leads WHERE id = ? AND assigned_to = ?",
+//          [id, req.user.id],
+//          (err, result) => {
+
+//             if (err) return res.status(500).json(err);
+
+//             if (result.length === 0) {
+//                return res.status(403).json({
+//                   message: "You can only edit your assigned leads"
+//                });
+//             }
+
+//             // 🔥 Safe to update
+//             db.query(
+//                "UPDATE leads SET name=?, phone=?, email=?, source=?, status=? WHERE id=?",
+//                [name, phone, email, source, status, id],
+//                (err) => {
+//                   if (err) return res.status(500).json(err);
+//                   res.json({ message: "Lead updated successfully" });
+//                }
+//             );
+//          }
+//       );
+
+//    } else {
+
+//       // 🔥 Admin can edit everything
+//       db.query(
+//          "UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? WHERE id=?",
+//          [name, phone, email, source, status, assigned_to, id],
+//          (err) => {
+//             if (err) return res.status(500).json(err);
+//             res.json({ message: "Lead updated successfully" });
+//          }
+//       );
+//    }
 // };
 
-exports.updateLead = (req, res) => {
 
+exports.updateLead = (req, res) => {
    const { id } = req.params;
    const { name, phone, email, source, status, assigned_to } = req.body;
 
-   // 🔥 If not admin, check ownership
-   if (req.user.role !== "admin") {
+   // If staff → only update own leads
+   let checkQuery = "SELECT assigned_to FROM leads WHERE id = ?";
 
-      db.query(
-         "SELECT * FROM leads WHERE id = ? AND assigned_to = ?",
-         [id, req.user.id],
-         (err, result) => {
+   db.query(checkQuery, [id], (err, result) => {
+      if (err) return res.status(500).json(err);
+      if (result.length === 0)
+         return res.status(404).json({ message: "Lead not found" });
 
-            if (err) return res.status(500).json(err);
+      const lead = result[0];
 
-            if (result.length === 0) {
-               return res.status(403).json({
-                  message: "You can only edit your assigned leads"
-               });
-            }
+      if (req.user.role !== "admin" && lead.assigned_to !== req.user.id) {
+         return res.status(403).json({ message: "Not allowed to edit this lead" });
+      }
 
-            // 🔥 Safe to update
-            db.query(
-               "UPDATE leads SET name=?, phone=?, email=?, source=?, status=? WHERE id=?",
-               [name, phone, email, source, status, id],
-               (err) => {
-                  if (err) return res.status(500).json(err);
-                  res.json({ message: "Lead updated successfully" });
-               }
-            );
-         }
-      );
-
-   } else {
-
-      // 🔥 Admin can edit everything
+      // Update allowed
       db.query(
          "UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? WHERE id=?",
-         [name, phone, email, source, status, assigned_to, id],
-         (err) => {
+         [name, phone, email, source, status, assigned_to || lead.assigned_to, id],
+         (err, result) => {
             if (err) return res.status(500).json(err);
             res.json({ message: "Lead updated successfully" });
          }
       );
-   }
+   });
 };
+
+exports.getSingleLead = (req, res) => {
+
+   const { id } = req.params;
+
+   db.query(
+      `SELECT leads.*, users.name AS assigned_user
+     FROM leads
+     LEFT JOIN users ON leads.assigned_to = users.id
+     WHERE leads.id = ?`,
+      [id],
+      (err, result) => {
+
+         if (err) return res.status(500).json(err);
+
+         if (result.length === 0) {
+            return res.status(404).json({ message: "Lead not found" });
+         }
+
+         res.json(result[0]);
+      }
+   );
+};
+
 
 
 exports.deleteLead = (req, res) => {

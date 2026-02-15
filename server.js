@@ -4,7 +4,9 @@ require("dotenv").config();
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const leadRoutes = require("./routes/leadRoutes");
-const userRoutes= require("./routes/userRoutes")
+const userRoutes = require("./routes/userRoutes")
+const followupRoutes = require("./routes/followupRoutes");
+
 
 const app = express();
 
@@ -14,7 +16,9 @@ app.use(express.json());
 app.use("/api", authRoutes);
 app.use("/api", dashboardRoutes);
 app.use("/api", leadRoutes);
-app.use("/api",userRoutes)
+app.use("/api", userRoutes)
+app.use("/api", followupRoutes);
+
 
 app.listen(process.env.PORT, () => {
    console.log(`Server running on port ${process.env.PORT}`);
