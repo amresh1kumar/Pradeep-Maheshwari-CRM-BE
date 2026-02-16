@@ -48,3 +48,52 @@ exports.getDashboardStats = (req, res) => {
       });
    });
 };
+
+exports.getRevenueStats = (req, res) => {
+
+   const userId = req.user.id;
+   const role = req.user.role;
+
+   let whereClause = "";
+   let values = [];
+
+   if (role !== "admin") {
+      whereClause = "WHERE sale_details.created_by = ?";
+      values.push(userId);
+   }
+
+   // 🔹 Total Revenue
+   const totalQuery = `
+      SELECT SUM(sale_amount) AS totalRevenue
+      FROM sale_details
+      ${whereClause}
+   `;
+
+   db.query(totalQuery, values, (err, totalResult) => {
+
+      if (err) return res.status(500).json(err);
+
+      const totalRevenue = totalResult[0].totalRevenue || 0;
+
+      // 🔹 Monthly Revenue
+      const monthlyQuery = `
+         SELECT 
+            DATE_FORMAT(closing_date, '%Y-%m') AS month,
+            SUM(sale_amount) AS revenue
+         FROM sale_details
+         ${whereClause}
+         GROUP BY month
+         ORDER BY month ASC
+      `;
+
+      db.query(monthlyQuery, values, (err, monthlyResult) => {
+
+         if (err) return res.status(500).json(err);
+
+         res.json({
+            totalRevenue,
+            monthlyRevenue: monthlyResult
+         });
+      });
+   });
+};

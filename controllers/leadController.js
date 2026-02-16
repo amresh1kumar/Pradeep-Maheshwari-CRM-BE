@@ -1,28 +1,6 @@
 const db = require("../config/db");
-
-// exports.createLead = (req, res) => {
-//    const { name, phone, email, source, status, assigned_to } = req.body;
-
-//    let assignUserId;
-
-//    if (req.user.role === "admin") {
-//       // Admin can assign manually
-//       assignUserId = assigned_to || null;
-//    } else {
-//       // Staff auto assign to self
-//       assignUserId = req.user.id;
-//    }
-
-//    db.query(
-//       "INSERT INTO leads (name,phone,email,source,status,assigned_to) VALUES (?,?,?,?,?,?)",
-//       [name, phone, email, source, status || "New", assignUserId],
-//       (err, result) => {
-//          if (err) return res.status(500).json(err);
-//          res.json({ message: "Lead created successfully" });
-//       }
-//    );
-// };
-
+const XLSX = require("xlsx");
+const fs = require("fs");
 
 exports.createLead = (req, res) => {
 
@@ -45,7 +23,7 @@ exports.createLead = (req, res) => {
          source,
          status || "New",
          assignUserId,
-         req.user.id  
+         req.user.id
       ],
       (err, result) => {
          if (err) return res.status(500).json(err);
@@ -53,8 +31,6 @@ exports.createLead = (req, res) => {
       }
    );
 };
-
-
 
 exports.getLeads = (req, res) => {
 
@@ -119,8 +95,6 @@ exports.getLeads = (req, res) => {
    });
 };
 
-
-
 exports.updateLead = (req, res) => {
    const { id } = req.params;
    const { name, phone, email, source, status, assigned_to } = req.body;
@@ -174,8 +148,6 @@ exports.getSingleLead = (req, res) => {
    );
 };
 
-
-
 exports.deleteLead = (req, res) => {
    const { id } = req.params;
 
@@ -185,7 +157,6 @@ exports.deleteLead = (req, res) => {
       res.json({ message: "Lead deleted successfully" });
    });
 };
-
 
 exports.getLeadStats = (req, res) => {
 
@@ -199,5 +170,174 @@ exports.getLeadStats = (req, res) => {
   `, (err, result) => {
       if (err) return res.status(500).json(err);
       res.json(result[0]);
+   });
+};
+
+exports.importLeadsFromExcel = (req, res) => {
+
+   if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+   }
+
+   const workbook = XLSX.readFile(req.file.path);
+   const sheetName = workbook.SheetNames[0];
+   const sheetData = XLSX.utils.sheet_to_json(
+      workbook.Sheets[sheetName]
+   );
+
+   if (!sheetData.length) {
+      return res.status(400).json({ message: "Excel file empty" });
+   }
+
+   const leads = sheetData.map(row => [
+      row.Name,
+      row.Phone,
+      row.Email,
+      row.Source || "Website",
+      "New",
+      req.user.id,
+      req.user.id
+   ]);
+
+   const query = `
+      INSERT INTO leads 
+      (name, phone, email, source, status, assigned_to, created_by)
+      VALUES ?
+   `;
+
+   db.query(query, [leads], (err, result) => {
+      fs.unlinkSync(req.file.path); // delete uploaded file
+
+      if (err) return res.status(500).json(err);
+
+      res.json({
+         message: `${result.affectedRows} leads imported successfully`
+      });
+   });
+};
+
+exports.exportLeads = (req, res) => {
+
+   db.query(`
+      SELECT 
+         leads.name,
+         leads.phone,
+         leads.email,
+         leads.source,
+         leads.status,
+         u1.name AS assigned_to,
+         u2.name AS created_by
+      FROM leads
+      LEFT JOIN users u1 ON leads.assigned_to = u1.id
+      LEFT JOIN users u2 ON leads.created_by = u2.id
+   `, (err, result) => {
+
+      if (err) return res.status(500).json(err);
+
+      if (result.length === 0) {
+         return res.status(400).json({ message: "No leads found" });
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(result);
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
+
+      const buffer = XLSX.write(workbook, {
+         type: "buffer",
+         bookType: "xlsx"
+      });
+
+      res.setHeader(
+         "Content-Disposition",
+         "attachment; filename=Leads.xlsx"
+      );
+
+      res.setHeader(
+         "Content-Type",
+         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+      res.send(buffer);
+
+   });
+};
+
+exports.convertToSale = (req, res) => {
+
+   const { id } = req.params;
+   const { sale_amount, closing_date } = req.body;
+
+   if (!sale_amount || !closing_date) {
+      return res.status(400).json({ message: "Amount and date required" });
+   }
+
+   db.query(
+      "INSERT INTO sale_details (lead_id, sale_amount, closing_date, created_by) VALUES (?, ?, ?, ?)",
+      [id, sale_amount, closing_date, req.user.id],
+      (err) => {
+
+         if (err) return res.status(500).json(err);
+
+         // Update lead status
+         db.query(
+            "UPDATE leads SET status='Closed Won' WHERE id=?",
+            [id]
+         );
+
+         res.json({ message: "Lead converted to sale successfully" });
+      }
+   );
+};
+
+// exports.getAllSales = (req, res) => {
+
+//    db.query(`
+//       SELECT 
+//          sale_details.*,
+//          leads.name AS lead_name,
+//          users.name AS created_by_name
+//       FROM sale_details
+//       LEFT JOIN leads ON sale_details.lead_id = leads.id
+//       LEFT JOIN users ON sale_details.created_by = users.id
+//    `, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+
+//       res.json(result);
+//    });
+// };
+
+exports.getAllSales = (req, res) => {
+
+   const userId = req.user.id;
+   const userRole = req.user.role;
+
+   let whereClause = "";
+   let values = [];
+
+   // 🔹 Staff restriction
+   if (userRole !== "admin") {
+      whereClause = "WHERE sale_details.created_by = ?";
+      values.push(userId);
+   }
+
+   const query = `
+      SELECT 
+         sale_details.*,
+         leads.name AS lead_name,
+         users.name AS created_by_name
+      FROM sale_details
+      LEFT JOIN leads ON sale_details.lead_id = leads.id
+      LEFT JOIN users ON sale_details.created_by = users.id
+      ${whereClause}
+      ORDER BY sale_details.created_at DESC
+   `;
+
+   db.query(query, values, (err, result) => {
+
+      if (err) return res.status(500).json(err);
+
+      res.json(result);
    });
 };
