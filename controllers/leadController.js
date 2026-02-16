@@ -1,22 +1,23 @@
 const db = require("../config/db");
 
 // exports.createLead = (req, res) => {
-
 //    const { name, phone, email, source, status, assigned_to } = req.body;
 
-//    // 🔥 Admin assign manually
-//    // 🔥 Staff auto assign to himself
-//    const assignedUser =
-//       req.user.role === "admin"
-//          ? assigned_to || null
-//          : req.user.id;
+//    let assignUserId;
+
+//    if (req.user.role === "admin") {
+//       // Admin can assign manually
+//       assignUserId = assigned_to || null;
+//    } else {
+//       // Staff auto assign to self
+//       assignUserId = req.user.id;
+//    }
 
 //    db.query(
 //       "INSERT INTO leads (name,phone,email,source,status,assigned_to) VALUES (?,?,?,?,?,?)",
-//       [name, phone, email, source, status, assignedUser],
-//       (err) => {
+//       [name, phone, email, source, status || "New", assignUserId],
+//       (err, result) => {
 //          if (err) return res.status(500).json(err);
-
 //          res.json({ message: "Lead created successfully" });
 //       }
 //    );
@@ -24,27 +25,35 @@ const db = require("../config/db");
 
 
 exports.createLead = (req, res) => {
+
    const { name, phone, email, source, status, assigned_to } = req.body;
 
    let assignUserId;
 
    if (req.user.role === "admin") {
-      // Admin can assign manually
       assignUserId = assigned_to || null;
    } else {
-      // Staff auto assign to self
       assignUserId = req.user.id;
    }
 
    db.query(
-      "INSERT INTO leads (name,phone,email,source,status,assigned_to) VALUES (?,?,?,?,?,?)",
-      [name, phone, email, source, status || "New", assignUserId],
+      "INSERT INTO leads (name,phone,email,source,status,assigned_to,created_by) VALUES (?,?,?,?,?,?,?)",
+      [
+         name,
+         phone,
+         email,
+         source,
+         status || "New",
+         assignUserId,
+         req.user.id  
+      ],
       (err, result) => {
          if (err) return res.status(500).json(err);
          res.json({ message: "Lead created successfully" });
       }
    );
 };
+
 
 
 exports.getLeads = (req, res) => {
@@ -91,9 +100,10 @@ exports.getLeads = (req, res) => {
       const total = countResult[0].total;
 
       const dataQuery = `
-      SELECT leads.*, users.name AS assigned_user
+      SELECT leads.*,users.name AS assigned_user,creator.name AS created_by_name
       FROM leads
       LEFT JOIN users ON leads.assigned_to = users.id
+      LEFT JOIN users AS creator ON leads.created_by = creator.id
       ${whereClause}
       LIMIT ? OFFSET ?
     `;
@@ -109,53 +119,6 @@ exports.getLeads = (req, res) => {
    });
 };
 
-
-// exports.updateLead = (req, res) => {
-
-//    const { id } = req.params;
-//    const { name, phone, email, source, status, assigned_to } = req.body;
-
-//    // 🔥 If not admin, check ownership
-//    if (req.user.role !== "admin") {
-
-//       db.query(
-//          "SELECT * FROM leads WHERE id = ? AND assigned_to = ?",
-//          [id, req.user.id],
-//          (err, result) => {
-
-//             if (err) return res.status(500).json(err);
-
-//             if (result.length === 0) {
-//                return res.status(403).json({
-//                   message: "You can only edit your assigned leads"
-//                });
-//             }
-
-//             // 🔥 Safe to update
-//             db.query(
-//                "UPDATE leads SET name=?, phone=?, email=?, source=?, status=? WHERE id=?",
-//                [name, phone, email, source, status, id],
-//                (err) => {
-//                   if (err) return res.status(500).json(err);
-//                   res.json({ message: "Lead updated successfully" });
-//                }
-//             );
-//          }
-//       );
-
-//    } else {
-
-//       // 🔥 Admin can edit everything
-//       db.query(
-//          "UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? WHERE id=?",
-//          [name, phone, email, source, status, assigned_to, id],
-//          (err) => {
-//             if (err) return res.status(500).json(err);
-//             res.json({ message: "Lead updated successfully" });
-//          }
-//       );
-//    }
-// };
 
 
 exports.updateLead = (req, res) => {
