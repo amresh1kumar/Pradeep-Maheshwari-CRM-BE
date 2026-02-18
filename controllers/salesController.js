@@ -28,3 +28,32 @@ exports.getSalesStats = (req, res) => {
       res.json(result[0]);
    });
 };
+
+
+exports.updateSale = (req, res) => {
+
+   const { id } = req.params;
+   const { sale_amount, closing_date } = req.body;
+
+   // Validation
+   if (!sale_amount || sale_amount <= 0) {
+      return res.status(400).json({ message: "Invalid sale amount" });
+   }
+
+   const today = new Date().toISOString().split("T")[0];
+
+   if (closing_date > today) {
+      return res.status(400).json({ message: "Closing date cannot be future" });
+   }
+
+   db.query(
+      "UPDATE sale_details SET sale_amount=?, closing_date=? WHERE id=?",
+      [sale_amount, closing_date, id],
+      (err) => {
+
+         if (err) return res.status(500).json(err);
+
+         res.json({ message: "Sale updated successfully" });
+      }
+   );
+};
