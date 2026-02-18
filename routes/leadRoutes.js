@@ -10,7 +10,7 @@ const {
    deleteLead,
    importLeadsFromExcel,
    exportLeads,
-   convertToSale
+   convertLeadToSale
 } = require("../controllers/leadController");
 const multer = require("multer")
 const upload = multer({ dest: "uploads/" });
@@ -22,7 +22,7 @@ router.get("/leads", verifyToken, getLeads);
 router.put("/leads/:id", verifyToken, updateLead);
 router.delete("/leads/:id", verifyToken, authorizeRoles("admin"), deleteLead);
 router.get("/leads/export", verifyToken, exportLeads);
-router.post("/leads/:id/convert", verifyToken, convertToSale);
+router.post("/leads/:id/convert", verifyToken, convertLeadToSale);
 router.get("/leads/:id", verifyToken, getSingleLead);
 
 // router.get("/leads/stats", verifyToken, getLeadStats);

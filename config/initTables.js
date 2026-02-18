@@ -74,6 +74,20 @@ const initTables = () => {
       )
    `);
 
+   // NOTIFICATIONS
+   db.query(`
+   CREATE TABLE IF NOT EXISTS notifications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT,
+      message TEXT,
+      type VARCHAR(50),
+      is_read BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+   )
+`);
+
+
    console.log("All tables checked/created");
 };
 

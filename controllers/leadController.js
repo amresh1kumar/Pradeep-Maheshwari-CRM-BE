@@ -263,7 +263,73 @@ exports.exportLeads = (req, res) => {
    });
 };
 
-exports.convertToSale = (req, res) => {
+// exports.convertToSale = (req, res) => {
+
+//    const { id } = req.params;
+//    const { sale_amount, closing_date } = req.body;
+
+//    if (!sale_amount || !closing_date) {
+//       return res.status(400).json({ message: "Amount and date required" });
+//    }
+
+//    db.query(
+//       "INSERT INTO sale_details (lead_id, sale_amount, closing_date, created_by) VALUES (?, ?, ?, ?)",
+//       [id, sale_amount, closing_date, req.user.id],
+//       (err) => {
+
+//          if (err) return res.status(500).json(err);
+
+//          // Update lead status
+//          db.query(
+//             "UPDATE leads SET status='Closed Won' WHERE id=?",
+//             [id]
+//          );
+
+//          res.json({ message: "Lead converted to sale successfully" });
+//       }
+//    );
+// };
+
+
+// exports.convertLeadToSale = (req, res) => {
+
+//    const { id } = req.params;
+//    const { sale_amount, closing_date } = req.body;
+
+//    if (!sale_amount || !closing_date) {
+//       return res.status(400).json({ message: "Amount and date required" });
+//    }
+
+//    // 1️⃣ Insert into sale_details
+//    db.query(
+//       "INSERT INTO sale_details (lead_id, sale_amount, closing_date, created_by) VALUES (?, ?, ?, ?)",
+//       [id, sale_amount, closing_date, req.user.id],
+//       (err) => {
+
+//          if (err) return res.status(500).json(err);
+
+//          // 2️⃣ Update lead status
+//          db.query(
+//             "UPDATE leads SET status='Closed Won' WHERE id=?",
+//             [id]
+//          );
+
+//          // 3️⃣ 🔔 Insert notification
+//          db.query(
+//             "INSERT INTO notifications (user_id, message, type) VALUES (?, ?, ?)",
+//             [
+//                req.user.id,
+//                `Lead #${id} converted to Sale ₹${sale_amount}`,
+//                "sale"
+//             ]
+//          );
+
+//          res.json({ message: "Lead converted successfully" });
+//       }
+//    );
+// };
+
+exports.convertLeadToSale = (req, res) => {
 
    const { id } = req.params;
    const { sale_amount, closing_date } = req.body;
@@ -279,34 +345,23 @@ exports.convertToSale = (req, res) => {
 
          if (err) return res.status(500).json(err);
 
-         // Update lead status
+         // 2️⃣ Update lead status + is_converted
          db.query(
-            "UPDATE leads SET status='Closed Won' WHERE id=?",
-            [id]
-         );
+            "UPDATE leads SET status = 'Closed Won', is_converted = 1 WHERE id = ?",
+            [id],
+            (err) => {
 
-         res.json({ message: "Lead converted to sale successfully" });
+               if (err) return res.status(500).json(err);
+
+               res.json({ message: "Lead converted successfully" });
+            }
+         );
       }
    );
 };
 
-// exports.getAllSales = (req, res) => {
 
-//    db.query(`
-//       SELECT 
-//          sale_details.*,
-//          leads.name AS lead_name,
-//          users.name AS created_by_name
-//       FROM sale_details
-//       LEFT JOIN leads ON sale_details.lead_id = leads.id
-//       LEFT JOIN users ON sale_details.created_by = users.id
-//    `, (err, result) => {
 
-//       if (err) return res.status(500).json(err);
-
-//       res.json(result);
-//    });
-// };
 
 exports.getAllSales = (req, res) => {
 
@@ -324,14 +379,16 @@ exports.getAllSales = (req, res) => {
 
    const query = `
       SELECT 
-         sale_details.*,
-         leads.name AS lead_name,
-         users.name AS created_by_name
-      FROM sale_details
-      LEFT JOIN leads ON sale_details.lead_id = leads.id
-      LEFT JOIN users ON sale_details.created_by = users.id
-      ${whereClause}
-      ORDER BY sale_details.created_at DESC
+   s.*,
+   l.name AS lead_name,
+   creator.name AS created_by_name,
+   assigned.name AS assigned_to_name
+   FROM sale_details s
+   JOIN leads l ON s.lead_id = l.id
+   LEFT JOIN users creator ON s.created_by = creator.id
+   LEFT JOIN users assigned ON l.assigned_to = assigned.id
+   ORDER BY s.id DESC
+
    `;
 
    db.query(query, values, (err, result) => {
