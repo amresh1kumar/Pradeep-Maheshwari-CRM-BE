@@ -120,3 +120,57 @@ exports.getAllFollowups = (req, res) => {
       res.json(result);
    });
 };
+
+
+exports.createFollowup = (req, res) => {
+
+   const { lead_id, note, next_followup_date, status } = req.body;
+
+   db.query(
+      `INSERT INTO followups 
+       (lead_id, note, next_followup_date, status, created_by)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+         lead_id,
+         note,
+         next_followup_date,
+         status || "Pending",
+         req.user.id
+      ],
+      (err) => {
+         if (err) return res.status(500).json(err);
+         res.json({ message: "Follow-up created successfully" });
+      }
+   );
+};
+
+
+exports.updateFollowup = (req, res) => {
+
+   const { id } = req.params;
+   const { note, next_followup_date, status } = req.body;
+
+   db.query(
+      `UPDATE followups 
+       SET note=?, next_followup_date=?
+       WHERE id=?`,
+      [note, next_followup_date, id],
+      (err) => {
+         if (err) return res.status(500).json(err);
+         res.json({ message: "Follow-up updated successfully" });
+      }
+   );
+};
+
+
+exports.deleteFollowup = (req, res) => {
+
+   db.query(
+      "DELETE FROM followups WHERE id=?",
+      [req.params.id],
+      (err) => {
+         if (err) return res.status(500).json(err);
+         res.json({ message: "Follow-up deleted successfully" });
+      }
+   );
+};

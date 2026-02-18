@@ -10,9 +10,7 @@ const initTables = require("./config/initTables");
 const saleRoutes = require("./routes/saleRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const generateFollowupNotifications = require("./utils/followupNotifier");
-
-
-
+const reportRoutes = require("./routes/reportRoutes");
 
 const app = express();
 
@@ -27,7 +25,7 @@ app.use("/api", followupRoutes);
 app.use("/api", saleRoutes);
 app.use("/api", dashboardRoutes);
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api", reportRoutes);
 
 initTables(); //this is call function for auto table create
 
