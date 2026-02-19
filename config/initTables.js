@@ -1,9 +1,8 @@
 const db = require("./db");
-const bcrypt = require("bcryptjs");
 
 const initTables = () => {
 
-   // ROLES
+   // ---------------- ROLES ----------------
    db.query(`
       CREATE TABLE IF NOT EXISTS roles (
          id INT AUTO_INCREMENT PRIMARY KEY,
@@ -16,7 +15,7 @@ const initTables = () => {
       VALUES ('admin'), ('staff')
    `);
 
-   // USERS
+   // ---------------- USERS ----------------
    db.query(`
       CREATE TABLE IF NOT EXISTS users (
          id INT AUTO_INCREMENT PRIMARY KEY,
@@ -29,7 +28,7 @@ const initTables = () => {
       )
    `);
 
-   // LEADS
+   // ---------------- LEADS ----------------
    db.query(`
       CREATE TABLE IF NOT EXISTS leads (
          id INT AUTO_INCREMENT PRIMARY KEY,
@@ -40,13 +39,14 @@ const initTables = () => {
          status VARCHAR(50),
          assigned_to INT,
          created_by INT,
+         is_converted BOOLEAN DEFAULT FALSE,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         FOREIGN KEY (assigned_to) REFERENCES users(id),
-         FOREIGN KEY (created_by) REFERENCES users(id)
+         FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
    `);
 
-   // FOLLOWUPS
+   // ---------------- FOLLOWUPS ----------------
    db.query(`
       CREATE TABLE IF NOT EXISTS followups (
          id INT AUTO_INCREMENT PRIMARY KEY,
@@ -55,12 +55,12 @@ const initTables = () => {
          next_followup_date DATE,
          created_by INT,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         FOREIGN KEY (lead_id) REFERENCES leads(id),
-         FOREIGN KEY (created_by) REFERENCES users(id)
+         FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
    `);
 
-   // SALE DETAILS
+   // ---------------- SALE DETAILS ----------------
    db.query(`
       CREATE TABLE IF NOT EXISTS sale_details (
          id INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,26 +69,25 @@ const initTables = () => {
          closing_date DATE,
          created_by INT,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         FOREIGN KEY (lead_id) REFERENCES leads(id),
-         FOREIGN KEY (created_by) REFERENCES users(id)
+         FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
    `);
 
-   // NOTIFICATIONS
+   // ---------------- NOTIFICATIONS ----------------
    db.query(`
-   CREATE TABLE IF NOT EXISTS notifications (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT,
-      message TEXT,
-      type VARCHAR(50),
-      is_read BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-   )
-`);
+      CREATE TABLE IF NOT EXISTS notifications (
+         id INT AUTO_INCREMENT PRIMARY KEY,
+         user_id INT,
+         message TEXT,
+         type VARCHAR(50),
+         is_read BOOLEAN DEFAULT FALSE,
+         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+   `);
 
-
-   console.log("All tables checked/created");
+   console.log("All tables checked/created successfully");
 };
 
 module.exports = initTables;

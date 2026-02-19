@@ -49,66 +49,6 @@ exports.getDashboardStats = (req, res) => {
    });
 };
 
-
-// exports.getRevenueStats = (req, res) => {
-
-//    const userId = req.user.id;
-//    const role = req.user.role;
-
-//    const { startDate, endDate } = req.query;
-
-//    let whereConditions = [];
-//    let values = [];
-
-//    if (role !== "admin") {
-//       whereConditions.push("sale_details.created_by = ?");
-//       values.push(userId);
-//    }
-
-//    if (startDate && endDate) {
-//       whereConditions.push("closing_date BETWEEN ? AND ?");
-//       values.push(startDate, endDate);
-//    }
-
-//    let whereClause = "";
-//    if (whereConditions.length > 0) {
-//       whereClause = "WHERE " + whereConditions.join(" AND ");
-//    }
-
-//    const totalQuery = `
-//       SELECT SUM(sale_amount) AS totalRevenue
-//       FROM sale_details
-//       ${whereClause}
-//    `;
-
-//    db.query(totalQuery, values, (err, totalResult) => {
-
-//       if (err) return res.status(500).json(err);
-
-//       const totalRevenue = totalResult[0].totalRevenue || 0;
-
-//       const monthlyQuery = `
-//          SELECT 
-//             DATE_FORMAT(closing_date, '%Y-%m') AS month,
-//             SUM(sale_amount) AS revenue
-//          FROM sale_details
-//          ${whereClause}
-//          GROUP BY month
-//          ORDER BY month ASC
-//       `;
-
-//       db.query(monthlyQuery, values, (err, monthlyResult) => {
-
-//          if (err) return res.status(500).json(err);
-
-//          res.json({
-//             totalRevenue,
-//             monthlyRevenue: monthlyResult
-//          });
-//       });
-//    });
-// };
-
 exports.getRevenueStats = (req, res) => {
 
    const userId = req.user.id;
@@ -220,3 +160,81 @@ exports.getConversionStats = (req, res) => {
 };
 
 
+exports.getReportSummary = (req, res) => {
+
+   const { type } = req.query;
+
+   let dateCondition = "";
+
+   if (type === "weekly") {
+      dateCondition = "AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
+   }
+
+   if (type === "monthly") {
+      dateCondition = "AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+   }
+
+   db.query(
+      `
+      SELECT 
+         COUNT(*) AS totalLeads,
+         SUM(status='Closed Won') AS converted
+      FROM leads
+      WHERE 1=1 ${dateCondition}
+      `,
+      (err, result) => {
+
+         if (err) return res.status(500).json(err);
+
+         const total = result[0].totalLeads || 0;
+         const converted = result[0].converted || 0;
+
+         res.json({
+            totalLeads: total,
+            converted,
+            notConverted: total - converted
+         });
+      }
+   );
+};
+
+
+exports.getReportStats = (req, res) => {
+
+   const type = req.query.type; // weekly | monthly
+
+   let dateCondition = "";
+
+   if (type === "weekly") {
+      dateCondition = "YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
+   } else {
+      dateCondition = "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+   }
+
+   const query = `
+      SELECT 
+         COUNT(*) AS totalLeads,
+         SUM(status='Closed Won') AS convertedLeads
+      FROM leads
+      WHERE ${dateCondition}
+   `;
+
+   db.query(query, (err, result) => {
+
+      if (err) return res.status(500).json(err);
+
+      const total = result[0].totalLeads || 0;
+      const converted = result[0].convertedLeads || 0;
+
+      const rate = total > 0
+         ? ((converted / total) * 100).toFixed(1)
+         : 0;
+
+      res.json({
+         total,
+         converted,
+         rate
+      });
+
+   });
+};

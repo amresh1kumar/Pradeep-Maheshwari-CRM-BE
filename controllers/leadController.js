@@ -95,35 +95,84 @@ exports.getLeads = (req, res) => {
    });
 };
 
+// exports.updateLead = (req, res) => {
+//    const { id } = req.params;
+//    const { name, phone, email, source, status, assigned_to } = req.body;
+
+//    // If staff → only update own leads
+//    let checkQuery = "SELECT assigned_to FROM leads WHERE id = ?";
+
+//    db.query(checkQuery, [id], (err, result) => {
+//       if (err) return res.status(500).json(err);
+//       if (result.length === 0)
+//          return res.status(404).json({ message: "Lead not found" });
+
+//       const lead = result[0];
+
+//       if (req.user.role !== "admin" && lead.assigned_to !== req.user.id) {
+//          return res.status(403).json({ message: "Not allowed to edit this lead" });
+//       }
+
+//       // Update allowed
+//       db.query(
+//          "UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? WHERE id=?",
+//          [name, phone, email, source, status, assigned_to || lead.assigned_to, id],
+//          (err, result) => {
+//             if (err) return res.status(500).json(err);
+//             res.json({ message: "Lead updated successfully" });
+//          }
+//       );
+//    });
+// };
+
 exports.updateLead = (req, res) => {
+
    const { id } = req.params;
    const { name, phone, email, source, status, assigned_to } = req.body;
 
-   // If staff → only update own leads
-   let checkQuery = "SELECT assigned_to FROM leads WHERE id = ?";
+   // First get original lead
+   db.query(
+      "SELECT assigned_to FROM leads WHERE id = ?",
+      [id],
+      (err, result) => {
 
-   db.query(checkQuery, [id], (err, result) => {
-      if (err) return res.status(500).json(err);
-      if (result.length === 0)
-         return res.status(404).json({ message: "Lead not found" });
+         if (err) return res.status(500).json(err);
+         if (!result.length)
+            return res.status(404).json({ message: "Lead not found" });
 
-      const lead = result[0];
+         const originalAssigned = result[0].assigned_to;
 
-      if (req.user.role !== "admin" && lead.assigned_to !== req.user.id) {
-         return res.status(403).json({ message: "Not allowed to edit this lead" });
-      }
+         // 🔥 Staff cannot change assignment
+         let finalAssignedTo = originalAssigned;
 
-      // Update allowed
-      db.query(
-         "UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? WHERE id=?",
-         [name, phone, email, source, status, assigned_to || lead.assigned_to, id],
-         (err, result) => {
-            if (err) return res.status(500).json(err);
-            res.json({ message: "Lead updated successfully" });
+         if (req.user.role === "admin") {
+            finalAssignedTo = assigned_to || originalAssigned;
          }
-      );
-   });
+
+         db.query(
+            `UPDATE leads 
+             SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? 
+             WHERE id=?`,
+            [
+               name,
+               phone,
+               email,
+               source,
+               status,
+               finalAssignedTo,
+               id
+            ],
+            (err) => {
+               if (err) return res.status(500).json(err);
+               res.json({ message: "Lead updated successfully" });
+            }
+         );
+      }
+   );
 };
+
+
+
 
 exports.getSingleLead = (req, res) => {
 
@@ -263,32 +312,86 @@ exports.exportLeads = (req, res) => {
    });
 };
 
-// exports.convertToSale = (req, res) => {
+// exports.convertLeadToSale = (req, res) => {
 
 //    const { id } = req.params;
 //    const { sale_amount, closing_date } = req.body;
 
-//    if (!sale_amount || !closing_date) {
-//       return res.status(400).json({ message: "Amount and date required" });
-//    }
+//    const io = req.app.get("io");
 
 //    db.query(
-//       "INSERT INTO sale_details (lead_id, sale_amount, closing_date, created_by) VALUES (?, ?, ?, ?)",
+//       `INSERT INTO sale_details 
+//        (lead_id, sale_amount, closing_date, created_by)
+//        VALUES (?, ?, ?, ?)`,
 //       [id, sale_amount, closing_date, req.user.id],
 //       (err) => {
 
 //          if (err) return res.status(500).json(err);
 
-//          // Update lead status
 //          db.query(
-//             "UPDATE leads SET status='Closed Won' WHERE id=?",
+//             `UPDATE leads 
+//              SET status='Closed Won', is_converted=1 
+//              WHERE id=?`,
 //             [id]
 //          );
 
-//          res.json({ message: "Lead converted to sale successfully" });
+//          db.query(
+//             `SELECT name, assigned_to FROM leads WHERE id=?`,
+//             [id],
+//             (err, result) => {
+
+//                if (!result.length) return;
+
+//                const lead = result[0];
+//                const message = `Lead "${lead.name}" converted to Sale ₹${sale_amount}`;
+
+//                // 🔥 Step 1: Notify Assigned Staff (if exists)
+//                if (lead.assigned_to) {
+
+//                   db.query(
+//                      `INSERT INTO notifications (user_id, message, type)
+//                       VALUES (?, ?, 'sale')`,
+//                      [lead.assigned_to, message]
+//                   );
+
+//                   io.to(`user_${lead.assigned_to}`).emit("newNotification", {
+//                      message,
+//                      type: "sale"
+//                   });
+//                }
+
+//                // 🔥 Step 2: Notify ALL Admins
+//                db.query(
+//                   `SELECT id FROM users WHERE role_id = 1`,
+//                   (err, admins) => {
+
+//                      admins.forEach(admin => {
+
+//                         db.query(
+//                            `INSERT INTO notifications (user_id, message, type)
+//                             VALUES (?, ?, 'sale')`,
+//                            [admin.id, message]
+//                         );
+
+//                         io.to(`user_${admin.id}`).emit("newNotification", {
+//                            message,
+//                            type: "sale"
+//                         });
+
+//                      });
+
+//                   }
+//                );
+
+//             }
+//          );
+
+//          res.json({ message: "Lead converted successfully" });
+
 //       }
 //    );
 // };
+
 
 
 // exports.convertLeadToSale = (req, res) => {
@@ -296,32 +399,75 @@ exports.exportLeads = (req, res) => {
 //    const { id } = req.params;
 //    const { sale_amount, closing_date } = req.body;
 
-//    if (!sale_amount || !closing_date) {
-//       return res.status(400).json({ message: "Amount and date required" });
-//    }
+//    const io = req.app.get("io");
 
-//    // 1️⃣ Insert into sale_details
+//    // Insert into sale_details
 //    db.query(
-//       "INSERT INTO sale_details (lead_id, sale_amount, closing_date, created_by) VALUES (?, ?, ?, ?)",
+//       `INSERT INTO sale_details 
+//        (lead_id, sale_amount, closing_date, created_by)
+//        VALUES (?, ?, ?, ?)`,
 //       [id, sale_amount, closing_date, req.user.id],
 //       (err) => {
 
 //          if (err) return res.status(500).json(err);
 
-//          // 2️⃣ Update lead status
+//          // Update lead
 //          db.query(
-//             "UPDATE leads SET status='Closed Won' WHERE id=?",
+//             `UPDATE leads 
+//              SET status='Closed Won', is_converted=1 
+//              WHERE id=?`,
 //             [id]
 //          );
 
-//          // 3️⃣ 🔔 Insert notification
+//          // Get lead info
 //          db.query(
-//             "INSERT INTO notifications (user_id, message, type) VALUES (?, ?, ?)",
-//             [
-//                req.user.id,
-//                `Lead #${id} converted to Sale ₹${sale_amount}`,
-//                "sale"
-//             ]
+//             `SELECT name, assigned_to FROM leads WHERE id=?`,
+//             [id],
+//             (err, result) => {
+
+//                if (!result.length) return;
+
+//                const lead = result[0];
+
+//                const message =
+//                   `Lead "${lead.name}" converted to Sale ₹${sale_amount}`;
+
+//                const notifyUsers = [];
+
+//                // Assigned user
+//                if (lead.assigned_to)
+//                   notifyUsers.push(lead.assigned_to);
+
+//                // Admins
+//                db.query(
+//                   `SELECT id FROM users WHERE role_id = 1`,
+//                   (err, admins) => {
+
+//                      admins.forEach(admin => {
+//                         notifyUsers.push(admin.id);
+//                      });
+
+//                      // Remove duplicates
+//                      const uniqueUsers = [...new Set(notifyUsers)];
+
+//                      uniqueUsers.forEach(userId => {
+
+//                         db.query(
+//                            `INSERT INTO notifications (user_id, message, type)
+//                             VALUES (?, ?, 'sale')`,
+//                            [userId, message]
+//                         );
+
+//                         io.to(`user_${userId}`).emit("newNotification", {
+//                            message,
+//                            type: "sale"
+//                         });
+
+//                      });
+
+//                   }
+//                );
+//             }
 //          );
 
 //          res.json({ message: "Lead converted successfully" });
@@ -329,38 +475,95 @@ exports.exportLeads = (req, res) => {
 //    );
 // };
 
+
 exports.convertLeadToSale = (req, res) => {
 
    const { id } = req.params;
    const { sale_amount, closing_date } = req.body;
 
-   if (!sale_amount || !closing_date) {
-      return res.status(400).json({ message: "Amount and date required" });
-   }
+   const io = req.app.get("io");
 
+   // Insert into sale_details
    db.query(
-      "INSERT INTO sale_details (lead_id, sale_amount, closing_date, created_by) VALUES (?, ?, ?, ?)",
+      `INSERT INTO sale_details 
+       (lead_id, sale_amount, closing_date, created_by)
+       VALUES (?, ?, ?, ?)`,
       [id, sale_amount, closing_date, req.user.id],
       (err) => {
 
          if (err) return res.status(500).json(err);
 
-         // 2️⃣ Update lead status + is_converted
+         // Update lead
          db.query(
-            "UPDATE leads SET status = 'Closed Won', is_converted = 1 WHERE id = ?",
-            [id],
-            (err) => {
+            `UPDATE leads 
+             SET status='Closed Won', is_converted=1 
+             WHERE id=?`,
+            [id]
+         );
 
-               if (err) return res.status(500).json(err);
+         // 🔥 Get lead + converter name
+         db.query(
+            `
+            SELECT 
+               l.name AS lead_name,
+               l.assigned_to,
+               u.name AS converted_by
+            FROM leads l
+            JOIN users u ON u.id = ?
+            WHERE l.id = ?
+            `,
+            [req.user.id, id],
+            (err, result) => {
 
-               res.json({ message: "Lead converted successfully" });
+               if (!result.length) return;
+
+               const lead = result[0];
+
+               const message =
+                  `Lead "${lead.lead_name}" converted to Sale ₹${sale_amount} by ${lead.converted_by}`;
+
+               const notifyUsers = [];
+
+               // Assigned user
+               if (lead.assigned_to)
+                  notifyUsers.push(lead.assigned_to);
+
+               // Admins
+               db.query(
+                  `SELECT id FROM users WHERE role_id = 1`,
+                  (err, admins) => {
+
+                     admins.forEach(admin => {
+                        notifyUsers.push(admin.id);
+                     });
+
+                     const uniqueUsers = [...new Set(notifyUsers)];
+
+                     uniqueUsers.forEach(userId => {
+
+                        db.query(
+                           `INSERT INTO notifications (user_id, message, type)
+                            VALUES (?, ?, 'sale')`,
+                           [userId, message]
+                        );
+
+                        io.to(`user_${userId}`).emit("newNotification", {
+                           message,
+                           type: "sale"
+                        });
+
+                     });
+
+                  }
+               );
+
             }
          );
+
+         res.json({ message: "Lead converted successfully" });
       }
    );
 };
-
-
 
 
 exports.getAllSales = (req, res) => {

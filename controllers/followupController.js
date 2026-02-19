@@ -89,8 +89,6 @@ exports.getFollowupSummary = (req, res) => {
    });
 };
 
-
-
 exports.getAllFollowups = (req, res) => {
 
    let query = `

@@ -1,69 +1,168 @@
 const db = require("../config/db");
+const XLSX = require("xlsx");
+
+// exports.getReport = (req, res) => {
+
+//    const { type } = req.query;
+
+//    let dateCondition = "";
+
+//    if (type === "weekly") {
+//       dateCondition = "AND closing_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+//    }
+
+//    if (type === "monthly") {
+//       dateCondition = "AND MONTH(closing_date) = MONTH(CURDATE())";
+//    }
+
+//    const query = `
+//       SELECT 
+//          COUNT(DISTINCT leads.id) AS totalLeads,
+//          SUM(leads.is_converted = 1) AS convertedLeads,
+//          SUM(sale_details.sale_amount) AS totalRevenue
+//       FROM leads
+//       LEFT JOIN sale_details 
+//          ON leads.id = sale_details.lead_id
+//       WHERE 1=1
+//       ${dateCondition}
+//    `;
+
+//    db.query(query, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+
+//       const data = result[0];
+
+//       const conversionRate =
+//          data.totalLeads > 0
+//             ? ((data.convertedLeads / data.totalLeads) * 100).toFixed(2)
+//             : 0;
+
+//       res.json({
+//          ...data,
+//          conversionRate
+//       });
+//    });
+// };
+
+
 
 exports.getReport = (req, res) => {
-   const { type } = req.query; // weekly / monthly
+
+   const { type } = req.query;
+
    let dateCondition = "";
+
    if (type === "weekly") {
-      dateCondition = "YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
+      dateCondition = "AND closing_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
    }
 
    if (type === "monthly") {
-      dateCondition = "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+      dateCondition = "AND MONTH(closing_date) = MONTH(CURDATE())";
    }
 
-   // Leads count
-   const leadsQuery = `
-      SELECT COUNT(*) AS totalLeads
+   const query = `
+      SELECT 
+         leads.id,
+         leads.name AS lead_name,
+         leads.status,
+         sale_details.sale_amount,
+         sale_details.closing_date
       FROM leads
-      WHERE ${dateCondition}
+      LEFT JOIN sale_details 
+         ON leads.id = sale_details.lead_id
+      WHERE 1=1
+      ${dateCondition}
    `;
 
-   db.query(leadsQuery, (err, leadResult) => {
+   db.query(query, (err, rows) => {
 
       if (err) return res.status(500).json(err);
 
-      const totalLeads = leadResult[0].totalLeads;
+      const totalLeads = rows.length;
+      const convertedLeads = rows.filter(r => r.sale_amount).length;
 
-      // Converted Leads
-      const convertedQuery = `
-         SELECT COUNT(*) AS convertedLeads
-         FROM leads
-         WHERE status='Closed Won'
-         AND ${dateCondition}
-      `;
+      const totalRevenue = rows.reduce(
+         (sum, r) => sum + (Number(r.sale_amount) || 0),
+         0
+      );
 
-      db.query(convertedQuery, (err, convertedResult) => {
+      const conversionRate =
+         totalLeads > 0
+            ? ((convertedLeads / totalLeads) * 100).toFixed(2)
+            : 0;
 
-         if (err) return res.status(500).json(err);
-
-         const convertedLeads = convertedResult[0].convertedLeads;
-
-         // Revenue
-         const revenueQuery = `
-            SELECT SUM(sale_amount) AS totalRevenue
-            FROM sale_details
-            WHERE ${dateCondition.replace("created_at", "closing_date")}
-         `;
-
-         db.query(revenueQuery, (err, revenueResult) => {
-
-            if (err) return res.status(500).json(err);
-
-            const totalRevenue = revenueResult[0].totalRevenue || 0;
-
-            const conversionRate =
-               totalLeads > 0
-                  ? ((convertedLeads / totalLeads) * 100).toFixed(2)
-                  : 0;
-
-            res.json({
-               totalLeads,
-               convertedLeads,
-               totalRevenue,
-               conversionRate
-            });
-
-         });
+      res.json({
+         summary: {
+            totalLeads,
+            convertedLeads,
+            totalRevenue,
+            conversionRate
+         },
+         rows
       });
+
+   });
+};
+
+
+
+
+exports.exportReport = (req, res) => {
+
+   const { type } = req.query;
+
+   let dateCondition = "";
+
+   if (type === "weekly") {
+      dateCondition = "AND closing_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+   }
+
+   if (type === "monthly") {
+      dateCondition = "AND MONTH(closing_date) = MONTH(CURDATE())";
+   }
+
+   const query = `
+      SELECT 
+         leads.name AS lead_name,
+         leads.status,
+         sale_details.sale_amount,
+         sale_details.closing_date
+      FROM leads
+      LEFT JOIN sale_details 
+         ON leads.id = sale_details.lead_id
+      WHERE 1=1
+      ${dateCondition}
+   `;
+
+   db.query(query, (err, result) => {
+
+      if (err) return res.status(500).json(err);
+
+      if (!result.length)
+         return res.status(400).json({ message: "No data found" });
+
+      const worksheet = XLSX.utils.json_to_sheet(result);
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
+
+      const buffer = XLSX.write(workbook, {
+         type: "buffer",
+         bookType: "xlsx"
+      });
+
+      res.setHeader(
+         "Content-Disposition",
+         `attachment; filename=${type}-report.xlsx`
+      );
+
+      res.setHeader(
+         "Content-Type",
+         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+      res.send(buffer);
+
    });
 };
