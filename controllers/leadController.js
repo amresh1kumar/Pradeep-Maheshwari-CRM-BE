@@ -34,105 +34,72 @@ exports.createLead = (req, res) => {
 
 exports.getLeads = (req, res) => {
 
-   const page = parseInt(req.query.page) || 1;
-   const limit = parseInt(req.query.limit) || 5;
-   const status = req.query.status;
+   const { page = 1, limit = 10, status } = req.query;
 
    const offset = (page - 1) * limit;
 
-   const userId = req.user.id;
-   const userRole = req.user.role;
-
-   let whereConditions = [];
-   let values = [];
-
-   // 🔹 Role-based restriction
-   if (userRole !== "admin") {
-      whereConditions.push("leads.assigned_to = ?");
-      values.push(userId);
-   }
-
-   // 🔹 Status filter
-   if (status) {
-      whereConditions.push("leads.status = ?");
-      values.push(status);
-   }
-
-   let whereClause = "";
-   if (whereConditions.length > 0) {
-      whereClause = "WHERE " + whereConditions.join(" AND ");
-   }
-
-   // 🔹 Count Query
-   const countQuery = `
-    SELECT COUNT(*) as total
-    FROM leads
-    ${whereClause}
-  `;
-
-   db.query(countQuery, values, (err, countResult) => {
-      if (err) return res.status(500).json(err);
-
-      const total = countResult[0].total;
-
-      const dataQuery = `
-      SELECT leads.*,users.name AS assigned_user,creator.name AS created_by_name
+   let query = `
+      SELECT leads.*, users.name AS assigned_user,
+             creator.name AS created_by_name
       FROM leads
       LEFT JOIN users ON leads.assigned_to = users.id
-      LEFT JOIN users AS creator ON leads.created_by = creator.id
-      ${whereClause}
-      LIMIT ? OFFSET ?
-    `;
+      LEFT JOIN users creator ON leads.created_by = creator.id
+   `;
 
-      db.query(dataQuery, [...values, limit, offset], (err, dataResult) => {
+   const params = [];
+   const conditions = [];
+
+   // 🔹 Staff should see ONLY their assigned leads
+   if (req.user.role !== "admin") {
+      conditions.push("leads.assigned_to = ?");
+      params.push(req.user.id);
+   }
+
+   // 🔹 Status filter only if selected
+   if (status) {
+      conditions.push("leads.status = ?");
+      params.push(status);
+   }
+
+   if (conditions.length > 0) {
+      query += " WHERE " + conditions.join(" AND ");
+   }
+
+   query += " ORDER BY leads.created_at DESC LIMIT ? OFFSET ?";
+   params.push(Number(limit), Number(offset));
+
+   db.query(query, params, (err, result) => {
+      if (err) return res.status(500).json(err);
+
+      // Total count query separately
+      let countQuery = "SELECT COUNT(*) AS total FROM leads";
+      let countParams = [];
+
+      if (conditions.length > 0) {
+         countQuery += " WHERE " + conditions.join(" AND ");
+         countParams = params.slice(0, conditions.length);
+      }
+
+      db.query(countQuery, countParams, (err, countResult) => {
          if (err) return res.status(500).json(err);
 
          res.json({
-            data: dataResult,
-            total: total
+            data: result,
+            total: countResult[0].total
          });
       });
    });
 };
 
-// exports.updateLead = (req, res) => {
-//    const { id } = req.params;
-//    const { name, phone, email, source, status, assigned_to } = req.body;
-
-//    // If staff → only update own leads
-//    let checkQuery = "SELECT assigned_to FROM leads WHERE id = ?";
-
-//    db.query(checkQuery, [id], (err, result) => {
-//       if (err) return res.status(500).json(err);
-//       if (result.length === 0)
-//          return res.status(404).json({ message: "Lead not found" });
-
-//       const lead = result[0];
-
-//       if (req.user.role !== "admin" && lead.assigned_to !== req.user.id) {
-//          return res.status(403).json({ message: "Not allowed to edit this lead" });
-//       }
-
-//       // Update allowed
-//       db.query(
-//          "UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? WHERE id=?",
-//          [name, phone, email, source, status, assigned_to || lead.assigned_to, id],
-//          (err, result) => {
-//             if (err) return res.status(500).json(err);
-//             res.json({ message: "Lead updated successfully" });
-//          }
-//       );
-//    });
-// };
-
 exports.updateLead = (req, res) => {
 
    const { id } = req.params;
-   const { name, phone, email, source, status, assigned_to } = req.body;
 
-   // First get original lead
+   const io = req.app.get("io");
+
+   // 1️⃣ Get existing lead first
    db.query(
-      "SELECT assigned_to FROM leads WHERE id = ?",
+      "SELECT * FROM leads WHERE id=?",
       [id],
       (err, result) => {
 
@@ -140,39 +107,63 @@ exports.updateLead = (req, res) => {
          if (!result.length)
             return res.status(404).json({ message: "Lead not found" });
 
-         const originalAssigned = result[0].assigned_to;
+         const oldLead = result[0];
 
-         // 🔥 Staff cannot change assignment
-         let finalAssignedTo = originalAssigned;
+         // 2️⃣ Use old values if not provided
+         const updatedLead = {
+            name: req.body.name ?? oldLead.name,
+            phone: req.body.phone ?? oldLead.phone,
+            email: req.body.email ?? oldLead.email,
+            source: req.body.source ?? oldLead.source,
+            status: req.body.status ?? oldLead.status,
+            assigned_to: req.body.assigned_to ?? oldLead.assigned_to
+         };
 
-         if (req.user.role === "admin") {
-            finalAssignedTo = assigned_to || originalAssigned;
-         }
-
+         // 3️⃣ Update safely
          db.query(
             `UPDATE leads 
              SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? 
              WHERE id=?`,
             [
-               name,
-               phone,
-               email,
-               source,
-               status,
-               finalAssignedTo,
+               updatedLead.name,
+               updatedLead.phone,
+               updatedLead.email,
+               updatedLead.source,
+               updatedLead.status,
+               updatedLead.assigned_to,
                id
             ],
             (err) => {
+
                if (err) return res.status(500).json(err);
+
+               // 🔔 Notify if assignment changed
+               if (
+                  updatedLead.assigned_to &&
+                  updatedLead.assigned_to !== oldLead.assigned_to
+               ) {
+
+                  const message = `New Lead Assigned: ${updatedLead.name}`;
+
+                  db.query(
+                     `INSERT INTO notifications (user_id, message, type)
+                      VALUES (?, ?, 'assignment')`,
+                     [updatedLead.assigned_to, message]
+                  );
+
+                  io.to(`user_${updatedLead.assigned_to}`)
+                     .emit("newNotification", {
+                        message,
+                        type: "assignment"
+                     });
+               }
+
                res.json({ message: "Lead updated successfully" });
             }
          );
       }
    );
 };
-
-
-
 
 exports.getSingleLead = (req, res) => {
 
@@ -312,170 +303,6 @@ exports.exportLeads = (req, res) => {
    });
 };
 
-// exports.convertLeadToSale = (req, res) => {
-
-//    const { id } = req.params;
-//    const { sale_amount, closing_date } = req.body;
-
-//    const io = req.app.get("io");
-
-//    db.query(
-//       `INSERT INTO sale_details 
-//        (lead_id, sale_amount, closing_date, created_by)
-//        VALUES (?, ?, ?, ?)`,
-//       [id, sale_amount, closing_date, req.user.id],
-//       (err) => {
-
-//          if (err) return res.status(500).json(err);
-
-//          db.query(
-//             `UPDATE leads 
-//              SET status='Closed Won', is_converted=1 
-//              WHERE id=?`,
-//             [id]
-//          );
-
-//          db.query(
-//             `SELECT name, assigned_to FROM leads WHERE id=?`,
-//             [id],
-//             (err, result) => {
-
-//                if (!result.length) return;
-
-//                const lead = result[0];
-//                const message = `Lead "${lead.name}" converted to Sale ₹${sale_amount}`;
-
-//                // 🔥 Step 1: Notify Assigned Staff (if exists)
-//                if (lead.assigned_to) {
-
-//                   db.query(
-//                      `INSERT INTO notifications (user_id, message, type)
-//                       VALUES (?, ?, 'sale')`,
-//                      [lead.assigned_to, message]
-//                   );
-
-//                   io.to(`user_${lead.assigned_to}`).emit("newNotification", {
-//                      message,
-//                      type: "sale"
-//                   });
-//                }
-
-//                // 🔥 Step 2: Notify ALL Admins
-//                db.query(
-//                   `SELECT id FROM users WHERE role_id = 1`,
-//                   (err, admins) => {
-
-//                      admins.forEach(admin => {
-
-//                         db.query(
-//                            `INSERT INTO notifications (user_id, message, type)
-//                             VALUES (?, ?, 'sale')`,
-//                            [admin.id, message]
-//                         );
-
-//                         io.to(`user_${admin.id}`).emit("newNotification", {
-//                            message,
-//                            type: "sale"
-//                         });
-
-//                      });
-
-//                   }
-//                );
-
-//             }
-//          );
-
-//          res.json({ message: "Lead converted successfully" });
-
-//       }
-//    );
-// };
-
-
-
-// exports.convertLeadToSale = (req, res) => {
-
-//    const { id } = req.params;
-//    const { sale_amount, closing_date } = req.body;
-
-//    const io = req.app.get("io");
-
-//    // Insert into sale_details
-//    db.query(
-//       `INSERT INTO sale_details 
-//        (lead_id, sale_amount, closing_date, created_by)
-//        VALUES (?, ?, ?, ?)`,
-//       [id, sale_amount, closing_date, req.user.id],
-//       (err) => {
-
-//          if (err) return res.status(500).json(err);
-
-//          // Update lead
-//          db.query(
-//             `UPDATE leads 
-//              SET status='Closed Won', is_converted=1 
-//              WHERE id=?`,
-//             [id]
-//          );
-
-//          // Get lead info
-//          db.query(
-//             `SELECT name, assigned_to FROM leads WHERE id=?`,
-//             [id],
-//             (err, result) => {
-
-//                if (!result.length) return;
-
-//                const lead = result[0];
-
-//                const message =
-//                   `Lead "${lead.name}" converted to Sale ₹${sale_amount}`;
-
-//                const notifyUsers = [];
-
-//                // Assigned user
-//                if (lead.assigned_to)
-//                   notifyUsers.push(lead.assigned_to);
-
-//                // Admins
-//                db.query(
-//                   `SELECT id FROM users WHERE role_id = 1`,
-//                   (err, admins) => {
-
-//                      admins.forEach(admin => {
-//                         notifyUsers.push(admin.id);
-//                      });
-
-//                      // Remove duplicates
-//                      const uniqueUsers = [...new Set(notifyUsers)];
-
-//                      uniqueUsers.forEach(userId => {
-
-//                         db.query(
-//                            `INSERT INTO notifications (user_id, message, type)
-//                             VALUES (?, ?, 'sale')`,
-//                            [userId, message]
-//                         );
-
-//                         io.to(`user_${userId}`).emit("newNotification", {
-//                            message,
-//                            type: "sale"
-//                         });
-
-//                      });
-
-//                   }
-//                );
-//             }
-//          );
-
-//          res.json({ message: "Lead converted successfully" });
-//       }
-//    );
-// };
-
-
 exports.convertLeadToSale = (req, res) => {
 
    const { id } = req.params;
@@ -565,39 +392,57 @@ exports.convertLeadToSale = (req, res) => {
    );
 };
 
-
 exports.getAllSales = (req, res) => {
 
    const userId = req.user.id;
    const userRole = req.user.role;
 
-   let whereClause = "";
-   let values = [];
+   let query = `
+      SELECT 
+         s.*,
+         l.name AS lead_name,
+         creator.name AS created_by_name,
+         assigned.name AS assigned_to_name
+      FROM sale_details s
+      JOIN leads l ON s.lead_id = l.id
+      LEFT JOIN users creator ON s.created_by = creator.id
+      LEFT JOIN users assigned ON l.assigned_to = assigned.id
+   `;
 
-   // 🔹 Staff restriction
+   const values = [];
+
+   // 🔒 Staff restriction
    if (userRole !== "admin") {
-      whereClause = "WHERE sale_details.created_by = ?";
+      query += " WHERE s.created_by = ?";
       values.push(userId);
    }
 
-   const query = `
-      SELECT 
-   s.*,
-   l.name AS lead_name,
-   creator.name AS created_by_name,
-   assigned.name AS assigned_to_name
-   FROM sale_details s
-   JOIN leads l ON s.lead_id = l.id
-   LEFT JOIN users creator ON s.created_by = creator.id
-   LEFT JOIN users assigned ON l.assigned_to = assigned.id
-   ORDER BY s.id DESC
-
-   `;
+   query += " ORDER BY s.id DESC";
 
    db.query(query, values, (err, result) => {
 
       if (err) return res.status(500).json(err);
 
+      res.json(result);
+   });
+};
+
+exports.getLeadsPipeline = (req, res) => {
+
+   let query = `
+      SELECT id, name, status, assigned_to
+      FROM leads
+   `;
+
+   const params = [];
+
+   if (req.user.role !== "admin") {
+      query += " WHERE assigned_to = ?";
+      params.push(req.user.id);
+   }
+
+   db.query(query, params, (err, result) => {
+      if (err) return res.status(500).json(err);
       res.json(result);
    });
 };

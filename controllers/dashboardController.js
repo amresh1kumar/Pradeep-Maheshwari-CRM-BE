@@ -50,7 +50,6 @@ exports.getDashboardStats = (req, res) => {
 };
 
 exports.getRevenueStats = (req, res) => {
-
    const userId = req.user.id;
    const role = req.user.role;
    const { startDate, endDate } = req.query;

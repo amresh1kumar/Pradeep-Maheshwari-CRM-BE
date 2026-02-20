@@ -65,7 +65,7 @@ const server = http.createServer(app);
 /* SOCKET.IO */
 const io = new Server(server, {
    cors: {
-      origin: "http://localhost:3000",
+      origin: "http://localhost:25975",
       methods: ["GET", "POST", "PUT", "DELETE"]
    }
 });
