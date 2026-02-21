@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { verifyToken } = require("../middleware/authMiddleware");
 const { authorizeRoles } = require("../middleware/roleMiddleware");
-const { getSingleLead, getLeadsPipeline } = require("../controllers/leadController");
+const { getSingleLead, getLeadsPipeline,getPipelineLeads , getLeadActivities} = require("../controllers/leadController");
 const {
    createLead,
    getLeads,
@@ -24,6 +24,8 @@ router.delete("/leads/:id", verifyToken, authorizeRoles("admin"), deleteLead);
 router.get("/leads/export", verifyToken, exportLeads);
 router.post("/leads/:id/convert", verifyToken, convertLeadToSale);
 router.get("/leads/:id", verifyToken, getSingleLead);
-router.get("/leads-pipeline", verifyToken, getLeadsPipeline)
+router.get("/leads-pipeline", verifyToken, getLeadsPipeline);
+router.get("/pipeline", verifyToken, getPipelineLeads);
+router.get("/leads/:id/activities", verifyToken, getLeadActivities);
 
 module.exports = router;

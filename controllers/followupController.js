@@ -1,24 +1,53 @@
 const db = require("../config/db");
 const dayjs = require("dayjs");
 
+const addActivity = (leadId, userId, action) => {
+   db.query(
+      `INSERT INTO lead_activities(lead_id,user_id,action) VALUES(?,?,?)`, [leadId, userId, action]
+   )
+}
+// exports.addFollowup = (req, res) => {
+
+//    const { lead_id, note, next_followup_date } = req.body;
+
+//    const created_by = req.user.id;
+
+//    db.query(
+//       "INSERT INTO followups (lead_id, note, next_followup_date, created_by) VALUES (?,?,?,?)",
+//       [lead_id, note, next_followup_date, created_by],
+//       (err) => {
+//          if (err) return res.status(500).json(err);
+//          addActivity(lead_id, req.user.id, "Follow-up Added");
+//          res.json({ message: "Follow-up added successfully" });
+//       }
+//    );
+// };
+
 
 exports.addFollowup = (req, res) => {
 
    const { lead_id, note, next_followup_date } = req.body;
-
    const created_by = req.user.id;
 
    db.query(
-      "INSERT INTO followups (lead_id, note, next_followup_date, created_by) VALUES (?,?,?,?)",
+      `INSERT INTO followups 
+       (lead_id, note, next_followup_date, created_by) 
+       VALUES (?,?,?,?)`,
       [lead_id, note, next_followup_date, created_by],
       (err) => {
+
          if (err) return res.status(500).json(err);
+
+         addActivity(
+            lead_id,
+            req.user.id,
+            `Follow-up scheduled for ${next_followup_date}`
+         );
 
          res.json({ message: "Follow-up added successfully" });
       }
    );
 };
-
 
 exports.getFollowupsByLead = (req, res) => {
 

@@ -87,6 +87,20 @@ const initTables = () => {
       )
    `);
 
+
+   // ---------------- LEAD ACTIVITIES (Timeline) ----------------
+   db.query(`
+   CREATE TABLE IF NOT EXISTS lead_activities (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      lead_id INT,
+      user_id INT,
+      action VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+   )
+`);
+
    console.log("All tables checked/created successfully");
 };
 
