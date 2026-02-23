@@ -28,6 +28,16 @@ const initTables = () => {
       )
    `);
 
+   // ---------------- PROJECTS ----------------
+   db.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+         id INT AUTO_INCREMENT PRIMARY KEY,
+         name VARCHAR(255) UNIQUE,
+         location VARCHAR(255),
+         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+   `);
+
    // ---------------- LEADS ----------------
    db.query(`
       CREATE TABLE IF NOT EXISTS leads (
@@ -37,10 +47,12 @@ const initTables = () => {
          email VARCHAR(100),
          source VARCHAR(100),
          status VARCHAR(50),
+         project_id INT,
          assigned_to INT,
          created_by INT,
          is_converted BOOLEAN DEFAULT FALSE,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
          FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
@@ -87,19 +99,18 @@ const initTables = () => {
       )
    `);
 
-
-   // ---------------- LEAD ACTIVITIES (Timeline) ----------------
+   // ---------------- LEAD ACTIVITIES ----------------
    db.query(`
-   CREATE TABLE IF NOT EXISTS lead_activities (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      lead_id INT,
-      user_id INT,
-      action VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-   )
-`);
+      CREATE TABLE IF NOT EXISTS lead_activities (
+         id INT AUTO_INCREMENT PRIMARY KEY,
+         lead_id INT,
+         user_id INT,
+         action VARCHAR(255),
+         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+         FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+   `);
 
    console.log("All tables checked/created successfully");
 };

@@ -9,45 +9,7 @@ const addActivity = (leadId, userId, action) => {
    )
 }
 
-// exports.createLead = (req, res) => {
 
-//    const {
-//       name,
-//       phone,
-//       email,
-//       source,
-//       status,
-//       assigned_to
-//    } = req.body;
-
-//    let assignUserId;
-
-//    if (req.user.role === "admin") {
-//       assignUserId = assigned_to || null;
-//    } else {
-//       assignUserId = req.user.id;
-//    }
-
-//    db.query(
-//       `INSERT INTO leads 
-//        (name, phone, email, source, status, assigned_to, created_by)
-//        VALUES (?,?,?,?,?,?,?)`,
-//       [
-//          name,
-//          phone,
-//          email,
-//          source,
-//          status || "New",
-//          assignUserId,
-//          req.user.id
-//       ],
-//       (err) => {
-//          if (err) return res.status(500).json(err);
-//          res.json({ message: "Lead created successfully" });
-//          addActivity(result.insertId, req.user.id, "Lead Created");
-//       }
-//    );
-// };
 
 exports.createLead = (req, res) => {
 
@@ -86,29 +48,106 @@ exports.createLead = (req, res) => {
 
 // exports.getLeads = (req, res) => {
 
-//    const { page = 1, limit = 10, status } = req.query;
+//    const { project_id } = req.query;
+
+//    if (project_id) {
+//       conditions.push("leads.project_id = ?");
+//       params.push(project_id);
+//    }
+
+//    const { page = 1, limit = 10, status, search } = req.query;
 //    const offset = (page - 1) * limit;
 
+//    //    // let query = `
+//    //    //    SELECT leads.*, 
+//    //    //           users.name AS assigned_user,
+//    //    //           creator.name AS created_by_name
+//    //    //    FROM leads
+//    //    //    LEFT JOIN users ON leads.assigned_to = users.id
+//    //    //    LEFT JOIN users creator ON leads.created_by = creator.id
+//    //    // `;
+//    //    let query = `
+//    //    SELECT 
+//    //       leads.*,
+//    //       users.name AS assigned_user,
+//    //       creator.name AS created_by_name,
+//    //       p.name AS project_name
+//    //    FROM leads
+//    //    LEFT JOIN users ON leads.assigned_to = users.id
+//    //    LEFT JOIN users creator ON leads.created_by = creator.id
+//    //    LEFT JOIN projects p ON leads.project_id = p.id
+//    // `;
+
+//    //    const params = [];
+//    //    const conditions = [];
+
+//    //    // 🔒 Staff restriction
+//    //    if (req.user.role !== "admin") {
+//    //       conditions.push("leads.assigned_to = ?");
+//    //       params.push(req.user.id);
+//    //    }
+
+//    //    // 🔍 Status filter
+//    //    if (status) {
+//    //       conditions.push("leads.status = ?");
+//    //       params.push(status);
+//    //    }
+
+//    //    // 🔎 Global Search
+//    //    if (search) {
+//    //       conditions.push(`
+//    //          (
+//    //             leads.name LIKE ? OR
+//    //             leads.phone LIKE ? OR
+//    //             leads.email LIKE ?
+//    //          )
+//    //       `);
+//    //       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+//    //    }
+
 //    let query = `
-//       SELECT leads.*, 
-//              users.name AS assigned_user,
-//              creator.name AS created_by_name
-//       FROM leads
-//       LEFT JOIN users ON leads.assigned_to = users.id
-//       LEFT JOIN users creator ON leads.created_by = creator.id
-//    `;
+//    SELECT 
+//       leads.*,
+//       users.name AS assigned_user,
+//       creator.name AS created_by_name,
+//       p.name AS project_name
+//    FROM leads
+//    LEFT JOIN users ON leads.assigned_to = users.id
+//    LEFT JOIN users creator ON leads.created_by = creator.id
+//    LEFT JOIN projects p ON leads.project_id = p.id
+// `;
 
 //    const params = [];
 //    const conditions = [];
 
+//    // 🔒 Staff restriction
 //    if (req.user.role !== "admin") {
 //       conditions.push("leads.assigned_to = ?");
 //       params.push(req.user.id);
 //    }
 
+//    // 🔍 Status filter
 //    if (status) {
 //       conditions.push("leads.status = ?");
 //       params.push(status);
+//    }
+
+//    // 🔎 Project filter
+//    if (project_id) {
+//       conditions.push("leads.project_id = ?");
+//       params.push(project_id);
+//    }
+
+//    // 🔎 Search
+//    if (search) {
+//       conditions.push(`
+//       (
+//          leads.name LIKE ? OR
+//          leads.phone LIKE ? OR
+//          leads.email LIKE ?
+//       )
+//    `);
+//       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
 //    }
 
 //    if (conditions.length > 0) {
@@ -121,12 +160,41 @@ exports.createLead = (req, res) => {
 //    db.query(query, params, (err, result) => {
 //       if (err) return res.status(500).json(err);
 
-//       let countQuery = "SELECT COUNT(*) AS total FROM leads";
-//       let countParams = [];
+//       // COUNT QUERY
+//       let countQuery = `
+//    SELECT COUNT(*) AS total
+//    FROM leads
+// `;
 
-//       if (conditions.length > 0) {
-//          countQuery += " WHERE " + conditions.join(" AND ");
-//          countParams = params.slice(0, conditions.length);
+//       const countParams = [];
+//       const countConditions = [];
+
+//       // Staff restriction
+//       if (req.user.role !== "admin") {
+//          countConditions.push("leads.assigned_to = ?");
+//          countParams.push(req.user.id);
+//       }
+
+//       // Status filter
+//       if (status) {
+//          countConditions.push("leads.status = ?");
+//          countParams.push(status);
+//       }
+
+//       // Search filter
+//       if (search) {
+//          countConditions.push(`
+//       (
+//          leads.name LIKE ? OR
+//          leads.phone LIKE ? OR
+//          leads.email LIKE ?
+//       )
+//    `);
+//          countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+//       }
+
+//       if (countConditions.length > 0) {
+//          countQuery += " WHERE " + countConditions.join(" AND ");
 //       }
 
 //       db.query(countQuery, countParams, (err, countResult) => {
@@ -140,93 +208,22 @@ exports.createLead = (req, res) => {
 //    });
 // };
 
-// exports.updateLead = (req, res) => {
-
-//    const { id } = req.params;
-//    const {
-//       name,
-//       phone,
-//       email,
-//       source,
-//       status,
-//       assigned_to,
-//    } = req.body;
-
-//    const io = req.app.get("io");
-
-//    db.query(
-//       "SELECT * FROM leads WHERE id=?",
-//       [id],
-//       (err, oldResult) => {
-
-//          if (err) return res.status(500).json(err);
-//          if (!oldResult.length)
-//             return res.status(404).json({ message: "Lead not found" });
-
-//          const oldLead = oldResult[0];
-
-//          const newStatus = status || oldLead.status;
-//          const newAssigned = assigned_to ?? oldLead.assigned_to;
-
-//          db.query(
-//             `UPDATE leads 
-//              SET name=?, 
-//                  phone=?, 
-//                  email=?, 
-//                  source=?, 
-//                  status=?, 
-//                  assigned_to=? 
-//              WHERE id=?`,
-//             [
-//                name ?? oldLead.name,
-//                phone ?? oldLead.phone,
-//                email ?? oldLead.email,
-//                source ?? oldLead.source,
-//                newStatus,
-//                newAssigned,
-//                id
-//             ],
-//             (err) => {
-
-//                if (err) return res.status(500).json(err);
-
-//                // 🔔 Assignment notification
-//                if (newAssigned && newAssigned !== oldLead.assigned_to) {
-
-//                   const message = `New Lead Assigned: ${oldLead.name}`;
-
-//                   db.query(
-//                      `INSERT INTO notifications (user_id, message, type)
-//                       VALUES (?, ?, 'assignment')`,
-//                      [newAssigned, message]
-//                   );
-
-//                   io.to(`user_${newAssigned}`).emit("newNotification", {
-//                      message,
-//                      type: "assignment"
-//                   });
-//                }
-//                addActivity(id, req.user.id, `Lead Assigned to User ID ${newAssigned}`);
-//                res.json({ message: "Lead updated successfully" });
-//                addActivity(id, req.user.id, `Lead Updated (Status:${newStatus})`);
-//             }
-//          );
-//       }
-//    );
-// };
 
 exports.getLeads = (req, res) => {
 
-   const { page = 1, limit = 10, status, search } = req.query;
+   const { page = 1, limit = 10, status, search, project_id } = req.query;
    const offset = (page - 1) * limit;
 
    let query = `
-      SELECT leads.*, 
-             users.name AS assigned_user,
-             creator.name AS created_by_name
+      SELECT 
+         leads.*,
+         users.name AS assigned_user,
+         creator.name AS created_by_name,
+         p.name AS project_name
       FROM leads
       LEFT JOIN users ON leads.assigned_to = users.id
       LEFT JOIN users creator ON leads.created_by = creator.id
+      LEFT JOIN projects p ON leads.project_id = p.id
    `;
 
    const params = [];
@@ -236,6 +233,12 @@ exports.getLeads = (req, res) => {
    if (req.user.role !== "admin") {
       conditions.push("leads.assigned_to = ?");
       params.push(req.user.id);
+   }
+
+   // 📁 Project filter
+   if (project_id) {
+      conditions.push("leads.project_id = ?");
+      params.push(project_id);
    }
 
    // 🔍 Status filter
@@ -264,38 +267,41 @@ exports.getLeads = (req, res) => {
    params.push(Number(limit), Number(offset));
 
    db.query(query, params, (err, result) => {
+
       if (err) return res.status(500).json(err);
 
       // COUNT QUERY
       let countQuery = `
-   SELECT COUNT(*) AS total
-   FROM leads
-`;
+         SELECT COUNT(*) AS total
+         FROM leads
+      `;
 
       const countParams = [];
       const countConditions = [];
 
-      // Staff restriction
       if (req.user.role !== "admin") {
          countConditions.push("leads.assigned_to = ?");
          countParams.push(req.user.id);
       }
 
-      // Status filter
+      if (project_id) {
+         countConditions.push("leads.project_id = ?");
+         countParams.push(project_id);
+      }
+
       if (status) {
          countConditions.push("leads.status = ?");
          countParams.push(status);
       }
 
-      // Search filter
       if (search) {
          countConditions.push(`
-      (
-         leads.name LIKE ? OR
-         leads.phone LIKE ? OR
-         leads.email LIKE ?
-      )
-   `);
+            (
+               leads.name LIKE ? OR
+               leads.phone LIKE ? OR
+               leads.email LIKE ?
+            )
+         `);
          countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
       }
 
@@ -311,6 +317,7 @@ exports.getLeads = (req, res) => {
             total: countResult[0].total
          });
       });
+
    });
 };
 
@@ -383,8 +390,6 @@ exports.updateLead = (req, res) => {
    );
 };
 
-
-
 exports.getSingleLead = (req, res) => {
 
    const { id } = req.params;
@@ -433,6 +438,7 @@ exports.getLeadStats = (req, res) => {
    });
 };
 
+
 // exports.importLeadsFromExcel = (req, res) => {
 
 //    if (!req.file) {
@@ -449,139 +455,292 @@ exports.getLeadStats = (req, res) => {
 //       return res.status(400).json({ message: "Excel file empty" });
 //    }
 
-//    const leads = sheetData.map(row => [
-//       row.Name,
-//       row.Phone,
-//       row.Email,
-//       row.Source || "Website",
-//       "New",
-//       req.user.id,
-//       req.user.id
-//    ]);
+//    let inserted = 0;
+//    let updated = 0;
+//    let skipped = 0;
 
-//    const query = `
-//       INSERT INTO leads 
-//       (name, phone, email, source, status, assigned_to, created_by)
-//       VALUES ?
-//    `;
+//    const processRow = (row) => {
 
-//    db.query(query, [leads], (err, result) => {
-//       fs.unlinkSync(req.file.path); // delete uploaded file
+//       return new Promise((resolve) => {
 
-//       if (err) return res.status(500).json(err);
+//          const { Name, Phone, Email, Source, Project } = row;
 
-//       res.json({
-//          message: `${result.affectedRows} leads imported successfully`
+//          if (!Project) {
+//             skipped++;
+//             return resolve();
+//          }
+
+//          const projectName = Project.trim();
+
+//          const createOrGetProject = (callback) => {
+
+//             db.query(
+//                "SELECT id FROM projects WHERE name=?",
+//                [projectName],
+//                (err, projectResult) => {
+
+//                   if (err) {
+//                      skipped++;
+//                      return resolve();
+//                   }
+
+//                   // If project exists
+//                   if (projectResult.length > 0) {
+//                      return callback(projectResult[0].id);
+//                   }
+
+//                   // Else create project safely
+//                   db.query(
+//                      "INSERT INTO projects (name) VALUES (?)",
+//                      [projectName],
+//                      (err, insertResult) => {
+
+//                         if (err) {
+//                            skipped++;
+//                            return resolve();
+//                         }
+
+//                         callback(insertResult.insertId);
+//                      }
+//                   );
+//                }
+//             );
+//          };
+
+//          const createOrUpdateLead = (projectId) => {
+
+//             if (!Email && !Phone) {
+//                skipped++;
+//                return resolve();
+//             }
+
+//             db.query(
+//                "SELECT id FROM leads WHERE email=? OR phone=?",
+//                [Email || "", Phone || ""],
+//                (err, existing) => {
+
+//                   if (err) {
+//                      skipped++;
+//                      return resolve();
+//                   }
+
+//                   if (existing.length > 0) {
+
+//                      // UPDATE
+//                      db.query(
+//                         `UPDATE leads 
+//                          SET name=?, source=?, project_id=? 
+//                          WHERE id=?`,
+//                         [
+//                            Name,
+//                            Source || "Website",
+//                            projectId,
+//                            existing[0].id
+//                         ],
+//                         (err) => {
+//                            if (!err) updated++;
+//                            resolve();
+//                         }
+//                      );
+
+//                   } else {
+
+//                      // INSERT
+//                      db.query(
+//                         `INSERT INTO leads
+//                          (name, phone, email, source, status, assigned_to, created_by, project_id)
+//                          VALUES (?,?,?,?,?,?,?,?)`,
+//                         [
+//                            Name,
+//                            Phone,
+//                            Email,
+//                            Source || "Website",
+//                            "New",
+//                            req.user.id,
+//                            req.user.id,
+//                            projectId
+//                         ],
+//                         (err) => {
+//                            if (!err) inserted++;
+//                            resolve();
+//                         }
+//                      );
+//                   }
+//                }
+//             );
+//          };
+
+//          createOrGetProject((projectId) => {
+//             createOrUpdateLead(projectId);
+//          });
+
 //       });
-//    });
+//    };
+
+//    Promise.all(sheetData.map(processRow))
+//       .then(() => {
+
+//          fs.unlinkSync(req.file.path);
+
+//          res.json({
+//             message: "Import completed",
+//             summary: {
+//                total: sheetData.length,
+//                inserted,
+//                updated,
+//                skipped
+//             }
+//          });
+
+//       })
+//       .catch((err) => {
+//          console.error(err);
+//          res.status(500).json({ message: "Import failed" });
+//       });
 // };
 
-
-exports.importLeadsFromExcel = (req, res) => {
+exports.importLeadsFromExcel = async (req, res) => {
 
    if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
    }
 
-   const workbook = XLSX.readFile(req.file.path);
-   const sheetName = workbook.SheetNames[0];
-   const sheetData = XLSX.utils.sheet_to_json(
-      workbook.Sheets[sheetName]
-   );
+   try {
 
-   if (!sheetData.length) {
-      return res.status(400).json({ message: "Excel file empty" });
-   }
+      const workbook = XLSX.readFile(req.file.path);
+      const sheetName = workbook.SheetNames[0];
+      const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-   let inserted = 0;
-   let updated = 0;
-   let skipped = 0;
+      if (!sheetData.length) {
+         fs.unlinkSync(req.file.path);
+         return res.status(400).json({ message: "Excel file empty" });
+      }
 
-   const processRow = (row) => {
+      let inserted = 0;
+      let updated = 0;
+      let skipped = 0;
 
-      return new Promise((resolve) => {
+      for (const row of sheetData) {
 
-         const { Name, Phone, Email, Source } = row;
+         // ✅ Trim & sanitize
+         const Name = row.Name?.toString().trim() || null;
+         const Phone = row.Phone?.toString().trim() || null;
+         const Email = row.Email?.toString().trim() || null;
+         const Source = row.Source?.toString().trim() || "Website";
+         const Project = row.Project?.toString().trim() || null;
+
+         if (!Project) {
+            skipped++;
+            continue;
+         }
 
          if (!Email && !Phone) {
             skipped++;
-            return resolve();
+            continue;
          }
 
-         // Check duplicate by email OR phone
-         db.query(
-            "SELECT id FROM leads WHERE email=? OR phone=?",
-            [Email || "", Phone || ""],
-            (err, existing) => {
+         // ✅ Get or Create Project
+         let projectId;
 
-               if (existing && existing.length > 0) {
-
-                  // UPDATE existing
-                  db.query(
-                     `UPDATE leads 
-                      SET name=?, source=? 
-                      WHERE id=?`,
-                     [
-                        Name,
-                        Source || "Website",
-                        existing[0].id
-                     ],
-                     () => {
-                        updated++;
-                        resolve();
-                     }
-                  );
-
-               } else {
-
-                  // INSERT new
-                  db.query(
-                     `INSERT INTO leads
-                      (name, phone, email, source, status, assigned_to, created_by)
-                      VALUES (?,?,?,?,?,?,?)`,
-                     [
-                        Name,
-                        Phone,
-                        Email,
-                        Source || "Website",
-                        "New",
-                        req.user.id,
-                        req.user.id
-                     ],
-                     () => {
-                        inserted++;
-                        resolve();
-                     }
-                  );
-               }
-
-            }
+         const [projectResult] = await db.promise().query(
+            "SELECT id FROM projects WHERE name = ?",
+            [Project]
          );
 
+         if (projectResult.length > 0) {
+            projectId = projectResult[0].id;
+         } else {
+            const [insertProject] = await db.promise().query(
+               "INSERT INTO projects (name) VALUES (?)",
+               [Project]
+            );
+            projectId = insertProject.insertId;
+         }
+
+         // ✅ Duplicate Detection (Safe)
+         let checkQuery = "SELECT id FROM leads WHERE ";
+         let checkParams = [];
+
+         if (Email && Phone) {
+            checkQuery += "(email = ? OR phone = ?)";
+            checkParams.push(Email, Phone);
+         } else if (Email) {
+            checkQuery += "email = ?";
+            checkParams.push(Email);
+         } else if (Phone) {
+            checkQuery += "phone = ?";
+            checkParams.push(Phone);
+         }
+
+         const [existing] = await db.promise().query(checkQuery, checkParams);
+
+         if (existing.length > 0) {
+
+            // 🔄 UPDATE
+            await db.promise().query(
+               `UPDATE leads 
+                SET name=?, source=?, project_id=? 
+                WHERE id=?`,
+               [
+                  Name,
+                  Source,
+                  projectId,
+                  existing[0].id
+               ]
+            );
+
+            updated++;
+
+         } else {
+
+            // ➕ INSERT
+            await db.promise().query(
+               `INSERT INTO leads
+                (name, phone, email, source, status, assigned_to, created_by, project_id)
+                VALUES (?,?,?,?,?,?,?,?)`,
+               [
+                  Name,
+                  Phone,
+                  Email,
+                  Source,
+                  "New",
+                  req.user.id,
+                  req.user.id,
+                  projectId
+               ]
+            );
+
+            inserted++;
+         }
+
+      }
+
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+         message: "Import completed successfully",
+         summary: {
+            total: sheetData.length,
+            inserted,
+            updated,
+            skipped
+         }
       });
-   };
 
-   Promise.all(sheetData.map(processRow))
-      .then(() => {
+   } catch (error) {
 
+      console.error(error);
+      if (req.file && fs.existsSync(req.file.path)) {
          fs.unlinkSync(req.file.path);
+      }
 
-         res.json({
-            message: "Import completed",
-            summary: {
-               total: sheetData.length,
-               inserted,
-               updated,
-               skipped
-            }
-         });
-
-      })
-      .catch(() => {
-         res.status(500).json({ message: "Import failed" });
+      res.status(500).json({
+         message: "Import failed",
+         error: error.message
       });
-
+   }
 };
+
 
 exports.exportLeads = (req, res) => {
 
@@ -748,76 +907,6 @@ exports.getAllSales = (req, res) => {
       res.json(result);
    });
 };
-
-exports.getLeadsPipeline = (req, res) => {
-
-   let query = `
-      SELECT id, name, status, assigned_to
-      FROM leads
-   `;
-
-   const params = [];
-
-   if (req.user.role !== "admin") {
-      query += " WHERE assigned_to = ?";
-      params.push(req.user.id);
-   }
-
-   db.query(query, params, (err, result) => {
-      if (err) return res.status(500).json(err);
-      res.json(result);
-   });
-};
-
-exports.getPipelineLeads = (req, res) => {
-
-   const {
-      stage,
-      page = 1,
-      limit = 20,
-      search = "",
-      assigned
-   } = req.query;
-
-   const offset = (page - 1) * limit;
-   const role = req.user.role;
-   const userId = req.user.id;
-
-   let query = `
-      SELECT id, name, phone, status, expected_value, probability, assigned_to
-      FROM leads
-      WHERE status = ?
-   `;
-
-   const params = [stage];
-
-   // 🔒 Staff restriction
-   if (role !== "admin") {
-      query += " AND assigned_to = ?";
-      params.push(userId);
-   }
-
-   // 🔍 Search filter
-   if (search) {
-      query += " AND (name LIKE ? OR phone LIKE ?)";
-      params.push(`%${search}%`, `%${search}%`);
-   }
-
-   // 👤 Assigned filter (admin only)
-   if (assigned) {
-      query += " AND assigned_to = ?";
-      params.push(assigned);
-   }
-
-   query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-   params.push(Number(limit), Number(offset));
-
-   db.query(query, params, (err, result) => {
-      if (err) return res.status(500).json(err);
-      res.json(result);
-   });
-};
-
 
 
 exports.getLeadActivities = (req, res) => {

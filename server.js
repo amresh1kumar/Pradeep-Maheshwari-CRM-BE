@@ -13,6 +13,7 @@ const followupRoutes = require("./routes/followupRoutes");
 const saleRoutes = require("./routes/saleRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const projectRoutes = require("./routes/projectRoutes")
 
 /* UTILS */
 const initTables = require("./config/initTables");
@@ -76,6 +77,7 @@ app.use("/api", followupRoutes);
 app.use("/api", saleRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api", reportRoutes);
+app.use("/api/projects", projectRoutes)
 
 /* INIT DATABASE TABLES */
 initTables();

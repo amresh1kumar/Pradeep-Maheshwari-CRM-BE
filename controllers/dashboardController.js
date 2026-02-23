@@ -237,3 +237,26 @@ exports.getReportStats = (req, res) => {
 
    });
 };
+
+
+exports.getProjectStats = (req, res) => {
+
+   let query = `
+      SELECT 
+         p.id,
+         p.name AS project_name,
+         COUNT(l.id) AS total_leads,
+         SUM(l.status = 'Closed Won') AS closed_won,
+         SUM(CASE WHEN l.status = 'Closed Won' THEN s.sale_amount ELSE 0 END) AS revenue
+      FROM projects p
+      LEFT JOIN leads l ON l.project_id = p.id
+      LEFT JOIN sale_details s ON s.lead_id = l.id
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+   `;
+
+   db.query(query, (err, result) => {
+      if (err) return res.status(500).json(err);
+      res.json(result);
+   });
+};

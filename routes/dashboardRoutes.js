@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { verifyToken } = require("../middleware/authMiddleware");
-const { getDashboardStats,getRevenueStats,getConversionStats,getReportSummary,getReportStats} = require("../controllers/dashboardController");
+const { getDashboardStats,getRevenueStats,getConversionStats,getReportSummary,getReportStats,getProjectStats} = require("../controllers/dashboardController");
 
 
 router.get("/dashboard-stats", verifyToken, getDashboardStats);
@@ -16,5 +16,6 @@ router.get("/dashboard", verifyToken, (req, res) => {
 
 router.get("/dashboard/report-summary", verifyToken, getReportSummary);
 router.get("/dashboard/report-stats", verifyToken, getReportStats);
+router.get("/dashboard/project-stats", verifyToken, getProjectStats);
 
 module.exports = router;

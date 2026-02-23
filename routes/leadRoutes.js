@@ -24,8 +24,6 @@ router.delete("/leads/:id", verifyToken, authorizeRoles("admin"), deleteLead);
 router.get("/leads/export", verifyToken, exportLeads);
 router.post("/leads/:id/convert", verifyToken, convertLeadToSale);
 router.get("/leads/:id", verifyToken, getSingleLead);
-router.get("/leads-pipeline", verifyToken, getLeadsPipeline);
-router.get("/pipeline", verifyToken, getPipelineLeads);
 router.get("/leads/:id/activities", verifyToken, getLeadActivities);
 
 module.exports = router;
