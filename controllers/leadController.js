@@ -9,35 +9,115 @@ const addActivity = (leadId, userId, action) => {
    )
 }
 
+// exports.createLead = (req, res) => {
+
+//    const { name, phone, email, source, status, assigned_to } = req.body;
+
+//    let assignUserId =
+//       req.user.role === "admin"
+//          ? assigned_to || null
+//          : req.user.id;
+
+//    db.query(
+//       `INSERT INTO leads 
+//        (name, phone, email, source, status, assigned_to, created_by)
+//        VALUES (?,?,?,?,?,?,?)`,
+//       [
+//          name,
+//          phone,
+//          email,
+//          source,
+//          status || "New",
+//          assignUserId,
+//          req.user.id
+//       ],
+//       (err, result) => {
+
+//          if (err) return res.status(500).json(err);
+
+//          addActivity(result.insertId, req.user.id, "Lead Created");
+
+//          res.json({ message: "Lead created successfully" });
+//       }
+//    );
+// };
+
+
 exports.createLead = (req, res) => {
 
-   const { name, phone, email, source, status, assigned_to } = req.body;
+   const {
+      name,
+      phone,
+      email,
+      source,
+      status,
+      assigned_to,
+      project_name
+   } = req.body;
 
-   let assignUserId =
+   if (!project_name) {
+      return res.status(400).json({ message: "Project name is required" });
+   }
+
+   const assignUserId =
       req.user.role === "admin"
          ? assigned_to || null
          : req.user.id;
 
+   const finalStatus = status || "New";
+   const finalSource = source || "Website";
+
+   const trimmedProject = project_name.trim();
+
+   // 🔹 Step 1: Check if project exists
    db.query(
-      `INSERT INTO leads 
-       (name, phone, email, source, status, assigned_to, created_by)
-       VALUES (?,?,?,?,?,?,?)`,
-      [
-         name,
-         phone,
-         email,
-         source,
-         status || "New",
-         assignUserId,
-         req.user.id
-      ],
-      (err, result) => {
+      "SELECT id FROM projects WHERE name=?",
+      [trimmedProject],
+      (err, projectResult) => {
 
          if (err) return res.status(500).json(err);
 
-         addActivity(result.insertId, req.user.id, "Lead Created");
+         const createLeadWithProject = (projectId) => {
 
-         res.json({ message: "Lead created successfully" });
+            db.query(
+               `INSERT INTO leads
+               (name, phone, email, source, status, assigned_to, created_by, project_id)
+               VALUES (?,?,?,?,?,?,?,?)`,
+               [
+                  name,
+                  phone,
+                  email,
+                  finalSource,
+                  finalStatus,
+                  assignUserId,
+                  req.user.id,
+                  projectId
+               ],
+               (err) => {
+
+                  if (err) return res.status(500).json(err);
+
+                  res.json({ message: "Lead created successfully" });
+               }
+            );
+         };
+
+         // 🔹 If project exists
+         if (projectResult.length > 0) {
+            return createLeadWithProject(projectResult[0].id);
+         }
+
+         // 🔹 Else create new project
+         db.query(
+            "INSERT INTO projects (name) VALUES (?)",
+            [trimmedProject],
+            (err, insertResult) => {
+
+               if (err) return res.status(500).json(err);
+
+               createLeadWithProject(insertResult.insertId);
+            }
+         );
       }
    );
 };
@@ -154,12 +234,94 @@ exports.getLeads = (req, res) => {
    });
 };
 
+// exports.updateLead = (req, res) => {
+
+//    const { id } = req.params;
+//    const { name, phone, email, source, status, assigned_to } = req.body;
+
+//    const io = req.app.get("io");
+
+//    db.query(
+//       "SELECT * FROM leads WHERE id=?",
+//       [id],
+//       (err, oldResult) => {
+
+//          if (err) return res.status(500).json(err);
+//          if (!oldResult.length)
+//             return res.status(404).json({ message: "Lead not found" });
+
+//          const oldLead = oldResult[0];
+
+//          const newStatus = status || oldLead.status;
+//          const newAssigned = assigned_to ?? oldLead.assigned_to;
+
+//          db.query(
+//             `UPDATE leads 
+//              SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? 
+//              WHERE id=?`,
+//             [
+//                name ?? oldLead.name,
+//                phone ?? oldLead.phone,
+//                email ?? oldLead.email,
+//                source ?? oldLead.source,
+//                newStatus,
+//                newAssigned,
+//                id
+//             ],
+//             (err) => {
+
+//                if (err) return res.status(500).json(err);
+
+//                // 🔔 Assignment change
+//                if (newAssigned && newAssigned !== oldLead.assigned_to) {
+
+//                   const message = `New Lead Assigned: ${oldLead.name}`;
+
+//                   db.query(
+//                      `INSERT INTO notifications (user_id, message, type)
+//                       VALUES (?, ?, 'assignment')`,
+//                      [newAssigned, message]
+//                   );
+
+//                   io.to(`user_${newAssigned}`).emit("newNotification", {
+//                      message,
+//                      type: "assignment"
+//                   });
+
+//                   addActivity(id, req.user.id, "Lead Assigned");
+//                }
+
+//                // 🔄 Status change
+//                if (newStatus !== oldLead.status) {
+//                   addActivity(id, req.user.id, `Status changed to ${newStatus}`);
+//                }
+
+//                res.json({ message: "Lead updated successfully" });
+//             }
+//          );
+//       }
+//    );
+// };
+
 exports.updateLead = (req, res) => {
 
    const { id } = req.params;
-   const { name, phone, email, source, status, assigned_to } = req.body;
+
+   const {
+      name,
+      phone,
+      email,
+      source,
+      status,
+      assigned_to,
+      project_id
+   } = req.body;
 
    const io = req.app.get("io");
+
+   if (!project_id) {
+      return res.status(400).json({ message: "Project selection is required" });
+   }
 
    db.query(
       "SELECT * FROM leads WHERE id=?",
@@ -172,12 +334,16 @@ exports.updateLead = (req, res) => {
 
          const oldLead = oldResult[0];
 
-         const newStatus = status || oldLead.status;
-         const newAssigned = assigned_to ?? oldLead.assigned_to;
+         const newStatus = status ?? oldLead.status;
+
+         const newAssigned =
+            req.user.role === "admin"
+               ? assigned_to ?? oldLead.assigned_to
+               : oldLead.assigned_to;
 
          db.query(
-            `UPDATE leads 
-             SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? 
+            `UPDATE leads
+             SET name=?, phone=?, email=?, source=?, status=?, assigned_to=?, project_id=?
              WHERE id=?`,
             [
                name ?? oldLead.name,
@@ -186,13 +352,17 @@ exports.updateLead = (req, res) => {
                source ?? oldLead.source,
                newStatus,
                newAssigned,
+               project_id,
                id
             ],
             (err) => {
 
                if (err) return res.status(500).json(err);
 
-               // 🔔 Assignment change
+               /* ===============================
+                  🔔 1. Assignment Notification
+               ================================ */
+
                if (newAssigned && newAssigned !== oldLead.assigned_to) {
 
                   const message = `New Lead Assigned: ${oldLead.name}`;
@@ -211,9 +381,38 @@ exports.updateLead = (req, res) => {
                   addActivity(id, req.user.id, "Lead Assigned");
                }
 
-               // 🔄 Status change
+               /* ===============================
+                  🔄 2. Status Change Activity
+               ================================ */
+
                if (newStatus !== oldLead.status) {
+
+                  // Optional: notify assigned user on status change
+                  if (oldLead.assigned_to) {
+                     const statusMessage =
+                        `Lead "${oldLead.name}" status changed to ${newStatus}`;
+
+                     db.query(
+                        `INSERT INTO notifications (user_id, message, type)
+                         VALUES (?, ?, 'status_change')`,
+                        [oldLead.assigned_to, statusMessage]
+                     );
+
+                     io.to(`user_${oldLead.assigned_to}`).emit("newNotification", {
+                        message: statusMessage,
+                        type: "status_change"
+                     });
+                  }
+
                   addActivity(id, req.user.id, `Status changed to ${newStatus}`);
+               }
+
+               /* ===============================
+                  📁 3. Project Change Activity
+               ================================ */
+
+               if (project_id !== oldLead.project_id) {
+                  addActivity(id, req.user.id, "Project Changed");
                }
 
                res.json({ message: "Lead updated successfully" });
@@ -221,7 +420,8 @@ exports.updateLead = (req, res) => {
          );
       }
    );
-};
+};;
+
 
 exports.getSingleLead = (req, res) => {
 
