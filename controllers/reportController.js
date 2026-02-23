@@ -1,52 +1,6 @@
 const db = require("../config/db");
 const XLSX = require("xlsx");
 
-// exports.getReport = (req, res) => {
-
-//    const { type } = req.query;
-
-//    let dateCondition = "";
-
-//    if (type === "weekly") {
-//       dateCondition = "AND closing_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
-//    }
-
-//    if (type === "monthly") {
-//       dateCondition = "AND MONTH(closing_date) = MONTH(CURDATE())";
-//    }
-
-//    const query = `
-//       SELECT 
-//          COUNT(DISTINCT leads.id) AS totalLeads,
-//          SUM(leads.is_converted = 1) AS convertedLeads,
-//          SUM(sale_details.sale_amount) AS totalRevenue
-//       FROM leads
-//       LEFT JOIN sale_details 
-//          ON leads.id = sale_details.lead_id
-//       WHERE 1=1
-//       ${dateCondition}
-//    `;
-
-//    db.query(query, (err, result) => {
-
-//       if (err) return res.status(500).json(err);
-
-//       const data = result[0];
-
-//       const conversionRate =
-//          data.totalLeads > 0
-//             ? ((data.convertedLeads / data.totalLeads) * 100).toFixed(2)
-//             : 0;
-
-//       res.json({
-//          ...data,
-//          conversionRate
-//       });
-//    });
-// };
-
-
-
 exports.getReport = (req, res) => {
 
    const { type } = req.query;

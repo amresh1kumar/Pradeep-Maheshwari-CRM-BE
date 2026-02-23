@@ -159,11 +159,54 @@ exports.getConversionStats = (req, res) => {
 };
 
 
+// exports.getReportSummary = (req, res) => {
+
+//    const { type } = req.query;
+
+//    let dateCondition = "";
+
+//    if (type === "weekly") {
+//       dateCondition = "AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
+//    }
+
+//    if (type === "monthly") {
+//       dateCondition = "AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+//    }
+
+//    db.query(
+//       `
+//       SELECT 
+//          COUNT(*) AS totalLeads,
+//          SUM(status='Closed Won') AS converted
+//       FROM leads
+//       WHERE 1=1 ${dateCondition}
+//       `,
+//       (err, result) => {
+
+//          if (err) return res.status(500).json(err);
+
+//          const total = result[0].totalLeads || 0;
+//          const converted = result[0].converted || 0;
+
+//          res.json({
+//             totalLeads: total,
+//             converted,
+//             notConverted: total - converted
+//          });
+//       }
+//    );
+// };
+
+
 exports.getReportSummary = (req, res) => {
 
    const { type } = req.query;
+   const userId = req.user.id;
+   const role = req.user.role;
 
    let dateCondition = "";
+   let roleCondition = "";
+   const params = [];
 
    if (type === "weekly") {
       dateCondition = "AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
@@ -173,41 +216,120 @@ exports.getReportSummary = (req, res) => {
       dateCondition = "AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
    }
 
-   db.query(
-      `
+   // 🔒 Staff restriction
+   if (role !== "admin") {
+      roleCondition = "AND assigned_to = ?";
+      params.push(userId);
+   }
+
+   const query = `
       SELECT 
          COUNT(*) AS totalLeads,
          SUM(status='Closed Won') AS converted
       FROM leads
-      WHERE 1=1 ${dateCondition}
-      `,
-      (err, result) => {
+      WHERE 1=1
+      ${roleCondition}
+      ${dateCondition}
+   `;
 
-         if (err) return res.status(500).json(err);
+   db.query(query, params, (err, result) => {
 
-         const total = result[0].totalLeads || 0;
-         const converted = result[0].converted || 0;
+      if (err) return res.status(500).json(err);
 
-         res.json({
-            totalLeads: total,
-            converted,
-            notConverted: total - converted
-         });
-      }
-   );
+      const total = result[0].totalLeads || 0;
+      const converted = result[0].converted || 0;
+
+      res.json({
+         totalLeads: total,
+         converted,
+         notConverted: total - converted
+      });
+   });
 };
+
+// exports.getReportStats = (req, res) => {
+
+//    const type = req.query.type; // weekly | monthly
+
+//    let dateCondition = "";
+
+//    if (type === "weekly") {
+//       dateCondition = "YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
+//    } else {
+//       dateCondition = "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+//    }
+
+//    const query = `
+//       SELECT 
+//          COUNT(*) AS totalLeads,
+//          SUM(status='Closed Won') AS convertedLeads
+//       FROM leads
+//       WHERE ${dateCondition}
+//    `;
+
+//    db.query(query, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+
+//       const total = result[0].totalLeads || 0;
+//       const converted = result[0].convertedLeads || 0;
+
+//       const rate = total > 0
+//          ? ((converted / total) * 100).toFixed(1)
+//          : 0;
+
+//       res.json({
+//          total,
+//          converted,
+//          rate
+//       });
+
+//    });
+// };
+
+
+// exports.getProjectStats = (req, res) => {
+
+//    let query = `
+//       SELECT 
+//          p.id,
+//          p.name AS project_name,
+//          COUNT(l.id) AS total_leads,
+//          SUM(l.status = 'Closed Won') AS closed_won,
+//          SUM(CASE WHEN l.status = 'Closed Won' THEN s.sale_amount ELSE 0 END) AS revenue
+//       FROM projects p
+//       LEFT JOIN leads l ON l.project_id = p.id
+//       LEFT JOIN sale_details s ON s.lead_id = l.id
+//       GROUP BY p.id
+//       ORDER BY p.created_at DESC
+//    `;
+
+//    db.query(query, (err, result) => {
+//       if (err) return res.status(500).json(err);
+//       res.json(result);
+//    });
+// };
 
 
 exports.getReportStats = (req, res) => {
 
-   const type = req.query.type; // weekly | monthly
+   const { type } = req.query;
+   const userId = req.user.id;
+   const role = req.user.role;
 
    let dateCondition = "";
+   let roleCondition = "";
+   const params = [];
 
    if (type === "weekly") {
       dateCondition = "YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
    } else {
       dateCondition = "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+   }
+
+   if (role !== "admin") {
+      roleCondition = "AND assigned_to = ?";
+      params.push(userId);
    }
 
    const query = `
@@ -216,9 +338,10 @@ exports.getReportStats = (req, res) => {
          SUM(status='Closed Won') AS convertedLeads
       FROM leads
       WHERE ${dateCondition}
+      ${roleCondition}
    `;
 
-   db.query(query, (err, result) => {
+   db.query(query, params, (err, result) => {
 
       if (err) return res.status(500).json(err);
 
@@ -238,8 +361,10 @@ exports.getReportStats = (req, res) => {
    });
 };
 
-
 exports.getProjectStats = (req, res) => {
+
+   const userId = req.user.id;
+   const role = req.user.role;
 
    let query = `
       SELECT 
@@ -247,15 +372,32 @@ exports.getProjectStats = (req, res) => {
          p.name AS project_name,
          COUNT(l.id) AS total_leads,
          SUM(l.status = 'Closed Won') AS closed_won,
-         SUM(CASE WHEN l.status = 'Closed Won' THEN s.sale_amount ELSE 0 END) AS revenue
+         SUM(
+            CASE 
+               WHEN l.status = 'Closed Won' 
+               THEN s.sale_amount 
+               ELSE 0 
+            END
+         ) AS revenue
       FROM projects p
       LEFT JOIN leads l ON l.project_id = p.id
       LEFT JOIN sale_details s ON s.lead_id = l.id
+   `;
+
+   const params = [];
+
+   // 🔒 Staff restriction
+   if (role !== "admin") {
+      query += " WHERE l.assigned_to = ?";
+      params.push(userId);
+   }
+
+   query += `
       GROUP BY p.id
       ORDER BY p.created_at DESC
    `;
 
-   db.query(query, (err, result) => {
+   db.query(query, params, (err, result) => {
       if (err) return res.status(500).json(err);
       res.json(result);
    });
