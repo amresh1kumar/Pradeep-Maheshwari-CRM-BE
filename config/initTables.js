@@ -17,16 +17,18 @@ const initTables = () => {
 
    // ---------------- USERS ----------------
    db.query(`
-      CREATE TABLE IF NOT EXISTS users (
-         id INT AUTO_INCREMENT PRIMARY KEY,
-         name VARCHAR(100),
-         email VARCHAR(100) UNIQUE,
-         password VARCHAR(255),
-         role_id INT,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         FOREIGN KEY (role_id) REFERENCES roles(id)
-      )
-   `);
+   CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100),
+      email VARCHAR(100) UNIQUE,
+      password VARCHAR(255),
+      role_id INT,
+      reset_token VARCHAR(255),
+      reset_token_expiry DATETIME,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (role_id) REFERENCES roles(id)
+   )
+`);
 
    // ---------------- PROJECTS ----------------
    db.query(`
