@@ -1,5 +1,6 @@
 const db = require("../config/db");
-const XLSX = require("xlsx");
+// const XLSX = require("xlsx");  //old with style
+const XLSX = require("xlsx-js-style");
 const fs = require("fs");
 
 
@@ -8,40 +9,6 @@ const addActivity = (leadId, userId, action) => {
       `INSERT INTO lead_activities(lead_id,user_id,action) VALUES(?,?,?)`, [leadId, userId, action]
    )
 }
-
-// exports.createLead = (req, res) => {
-
-//    const { name, phone, email, source, status, assigned_to } = req.body;
-
-//    let assignUserId =
-//       req.user.role === "admin"
-//          ? assigned_to || null
-//          : req.user.id;
-
-//    db.query(
-//       `INSERT INTO leads 
-//        (name, phone, email, source, status, assigned_to, created_by)
-//        VALUES (?,?,?,?,?,?,?)`,
-//       [
-//          name,
-//          phone,
-//          email,
-//          source,
-//          status || "New",
-//          assignUserId,
-//          req.user.id
-//       ],
-//       (err, result) => {
-
-//          if (err) return res.status(500).json(err);
-
-//          addActivity(result.insertId, req.user.id, "Lead Created");
-
-//          res.json({ message: "Lead created successfully" });
-//       }
-//    );
-// };
-
 
 exports.createLead = (req, res) => {
 
@@ -234,75 +201,6 @@ exports.getLeads = (req, res) => {
    });
 };
 
-// exports.updateLead = (req, res) => {
-
-//    const { id } = req.params;
-//    const { name, phone, email, source, status, assigned_to } = req.body;
-
-//    const io = req.app.get("io");
-
-//    db.query(
-//       "SELECT * FROM leads WHERE id=?",
-//       [id],
-//       (err, oldResult) => {
-
-//          if (err) return res.status(500).json(err);
-//          if (!oldResult.length)
-//             return res.status(404).json({ message: "Lead not found" });
-
-//          const oldLead = oldResult[0];
-
-//          const newStatus = status || oldLead.status;
-//          const newAssigned = assigned_to ?? oldLead.assigned_to;
-
-//          db.query(
-//             `UPDATE leads 
-//              SET name=?, phone=?, email=?, source=?, status=?, assigned_to=? 
-//              WHERE id=?`,
-//             [
-//                name ?? oldLead.name,
-//                phone ?? oldLead.phone,
-//                email ?? oldLead.email,
-//                source ?? oldLead.source,
-//                newStatus,
-//                newAssigned,
-//                id
-//             ],
-//             (err) => {
-
-//                if (err) return res.status(500).json(err);
-
-//                // 🔔 Assignment change
-//                if (newAssigned && newAssigned !== oldLead.assigned_to) {
-
-//                   const message = `New Lead Assigned: ${oldLead.name}`;
-
-//                   db.query(
-//                      `INSERT INTO notifications (user_id, message, type)
-//                       VALUES (?, ?, 'assignment')`,
-//                      [newAssigned, message]
-//                   );
-
-//                   io.to(`user_${newAssigned}`).emit("newNotification", {
-//                      message,
-//                      type: "assignment"
-//                   });
-
-//                   addActivity(id, req.user.id, "Lead Assigned");
-//                }
-
-//                // 🔄 Status change
-//                if (newStatus !== oldLead.status) {
-//                   addActivity(id, req.user.id, `Status changed to ${newStatus}`);
-//                }
-
-//                res.json({ message: "Lead updated successfully" });
-//             }
-//          );
-//       }
-//    );
-// };
-
 exports.updateLead = (req, res) => {
 
    const { id } = req.params;
@@ -359,9 +257,6 @@ exports.updateLead = (req, res) => {
 
                if (err) return res.status(500).json(err);
 
-               /* ===============================
-                  🔔 1. Assignment Notification
-               ================================ */
 
                if (newAssigned && newAssigned !== oldLead.assigned_to) {
 
@@ -380,10 +275,6 @@ exports.updateLead = (req, res) => {
 
                   addActivity(id, req.user.id, "Lead Assigned");
                }
-
-               /* ===============================
-                  🔄 2. Status Change Activity
-               ================================ */
 
                if (newStatus !== oldLead.status) {
 
@@ -421,7 +312,6 @@ exports.updateLead = (req, res) => {
       }
    );
 };;
-
 
 exports.getSingleLead = (req, res) => {
 
@@ -613,31 +503,130 @@ exports.importLeadsFromExcel = async (req, res) => {
    }
 };
 
+
+// exports.exportLeads = (req, res) => {
+
+//    let query = `
+//       SELECT 
+//          leads.name AS Name,
+//          leads.phone AS Phone,
+//          leads.email AS Email,
+//          leads.source AS Source,
+//          leads.status AS Status,
+//          p.name AS Project,
+//          u1.name AS Assigned_To,
+//          u2.name AS Created_By
+//       FROM leads
+//       LEFT JOIN users u1 ON leads.assigned_to = u1.id
+//       LEFT JOIN users u2 ON leads.created_by = u2.id
+//       LEFT JOIN projects p ON leads.project_id = p.id
+//    `;
+
+//    const params = [];
+
+//    // 🔒 Staff restriction
+//    if (req.user.role !== "admin") {
+//       query += " WHERE leads.assigned_to = ?";
+//       params.push(req.user.id);
+//    }
+
+//    db.query(query, params, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+
+//       if (!result.length) {
+//          return res.status(400).json({ message: "No leads found" });
+//       }
+
+//       const worksheet = XLSX.utils.json_to_sheet(result);
+//       const workbook = XLSX.utils.book_new();
+
+//       XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
+
+//       const buffer = XLSX.write(workbook, {
+//          type: "buffer",
+//          bookType: "xlsx"
+//       });
+
+//       res.setHeader(
+//          "Content-Disposition",
+//          "attachment; filename=Leads.xlsx"
+//       );
+
+//       res.setHeader(
+//          "Content-Type",
+//          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//       );
+
+//       res.send(buffer);
+//    });
+// };
+
 exports.exportLeads = (req, res) => {
 
-   db.query(`
+   let query = `
       SELECT 
-         leads.name,
-         leads.phone,
-         leads.email,
-         leads.source,
-         leads.status,
-         u1.name AS assigned_to,
-         u2.name AS created_by
+         leads.name AS Name,
+         leads.phone AS Phone,
+         leads.email AS Email,
+         leads.source AS Source,
+         leads.status AS Status,
+         p.name AS Project,
+         u1.name AS Assigned_To,
+         u2.name AS Created_By
       FROM leads
       LEFT JOIN users u1 ON leads.assigned_to = u1.id
       LEFT JOIN users u2 ON leads.created_by = u2.id
-   `, (err, result) => {
+      LEFT JOIN projects p ON leads.project_id = p.id
+   `;
+
+   const params = [];
+
+   if (req.user.role !== "admin") {
+      query += " WHERE leads.assigned_to = ?";
+      params.push(req.user.id);
+   }
+
+   db.query(query, params, (err, result) => {
 
       if (err) return res.status(500).json(err);
 
-      if (result.length === 0) {
+      if (!result.length) {
          return res.status(400).json({ message: "No leads found" });
       }
 
       const worksheet = XLSX.utils.json_to_sheet(result);
-      const workbook = XLSX.utils.book_new();
 
+      const headers = Object.keys(result[0]);
+
+      headers.forEach((header, colIndex) => {
+         const cellAddress = XLSX.utils.encode_cell({ r: 0, c: colIndex });
+
+         if (worksheet[cellAddress]) {
+            worksheet[cellAddress].s = {
+               font: {
+                  bold: true,
+                  color: { rgb: "000000" }
+               },
+               fill: {
+                  fgColor: { rgb: "FFF200" }
+               },
+               alignment: {
+                  horizontal: "center",
+                  vertical: "center"
+               }
+            };
+         }
+      });
+
+      worksheet["!cols"] = headers.map(header => ({
+         wch: Math.max(
+            header.length,
+            ...result.map(row => (row[header] ? row[header].toString().length : 10))
+         ) + 4
+      }));
+
+      const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
 
       const buffer = XLSX.write(workbook, {
@@ -656,7 +645,6 @@ exports.exportLeads = (req, res) => {
       );
 
       res.send(buffer);
-
    });
 };
 
