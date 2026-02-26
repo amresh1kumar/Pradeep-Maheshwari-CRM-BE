@@ -119,7 +119,6 @@ exports.getRevenueStats = (req, res) => {
    });
 };
 
-
 exports.getConversionStats = (req, res) => {
 
    const userId = req.user.id;
@@ -157,46 +156,6 @@ exports.getConversionStats = (req, res) => {
       });
    });
 };
-
-
-// exports.getReportSummary = (req, res) => {
-
-//    const { type } = req.query;
-
-//    let dateCondition = "";
-
-//    if (type === "weekly") {
-//       dateCondition = "AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
-//    }
-
-//    if (type === "monthly") {
-//       dateCondition = "AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
-//    }
-
-//    db.query(
-//       `
-//       SELECT 
-//          COUNT(*) AS totalLeads,
-//          SUM(status='Closed Won') AS converted
-//       FROM leads
-//       WHERE 1=1 ${dateCondition}
-//       `,
-//       (err, result) => {
-
-//          if (err) return res.status(500).json(err);
-
-//          const total = result[0].totalLeads || 0;
-//          const converted = result[0].converted || 0;
-
-//          res.json({
-//             totalLeads: total,
-//             converted,
-//             notConverted: total - converted
-//          });
-//       }
-//    );
-// };
-
 
 exports.getReportSummary = (req, res) => {
 
@@ -246,70 +205,6 @@ exports.getReportSummary = (req, res) => {
       });
    });
 };
-
-// exports.getReportStats = (req, res) => {
-
-//    const type = req.query.type; // weekly | monthly
-
-//    let dateCondition = "";
-
-//    if (type === "weekly") {
-//       dateCondition = "YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
-//    } else {
-//       dateCondition = "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
-//    }
-
-//    const query = `
-//       SELECT 
-//          COUNT(*) AS totalLeads,
-//          SUM(status='Closed Won') AS convertedLeads
-//       FROM leads
-//       WHERE ${dateCondition}
-//    `;
-
-//    db.query(query, (err, result) => {
-
-//       if (err) return res.status(500).json(err);
-
-//       const total = result[0].totalLeads || 0;
-//       const converted = result[0].convertedLeads || 0;
-
-//       const rate = total > 0
-//          ? ((converted / total) * 100).toFixed(1)
-//          : 0;
-
-//       res.json({
-//          total,
-//          converted,
-//          rate
-//       });
-
-//    });
-// };
-
-
-// exports.getProjectStats = (req, res) => {
-
-//    let query = `
-//       SELECT 
-//          p.id,
-//          p.name AS project_name,
-//          COUNT(l.id) AS total_leads,
-//          SUM(l.status = 'Closed Won') AS closed_won,
-//          SUM(CASE WHEN l.status = 'Closed Won' THEN s.sale_amount ELSE 0 END) AS revenue
-//       FROM projects p
-//       LEFT JOIN leads l ON l.project_id = p.id
-//       LEFT JOIN sale_details s ON s.lead_id = l.id
-//       GROUP BY p.id
-//       ORDER BY p.created_at DESC
-//    `;
-
-//    db.query(query, (err, result) => {
-//       if (err) return res.status(500).json(err);
-//       res.json(result);
-//    });
-// };
-
 
 exports.getReportStats = (req, res) => {
 
@@ -400,5 +295,65 @@ exports.getProjectStats = (req, res) => {
    db.query(query, params, (err, result) => {
       if (err) return res.status(500).json(err);
       res.json(result);
+   });
+};
+
+exports.getUnassignedCount = (req, res) => {
+
+   let query = `
+      SELECT COUNT(*) AS total
+      FROM leads
+      WHERE assigned_to IS NULL
+   `;
+
+   if (req.user.role !== "admin") {
+      query += " AND assigned_to = ?";
+      db.query(query, [req.user.id], (err, result) => {
+         if (err) return res.status(500).json(err);
+         res.json(result[0]);
+      });
+   } else {
+      db.query(query, (err, result) => {
+         if (err) return res.status(500).json(err);
+         res.json(result[0]);
+      });
+   }
+};
+
+
+exports.getLicenseStats = (req, res) => {
+
+   db.query("SELECT * FROM app_config LIMIT 1", (err, configResult) => {
+
+      if (err) return res.status(500).json(err);
+      if (!configResult.length)
+         return res.status(500).json({ message: "Config not found" });
+
+      const maxUsers = configResult[0].max_users;
+      const maxAdmin = configResult[0].max_admin;
+
+      db.query(`
+         SELECT 
+            COUNT(*) AS totalUsers,
+            SUM(CASE WHEN roles.role_name = 'admin' THEN 1 ELSE 0 END) AS adminCount
+         FROM users
+         JOIN roles ON users.role_id = roles.id
+      `, (err, countResult) => {
+
+         if (err) return res.status(500).json(err);
+
+         const totalUsers = countResult[0].totalUsers;
+         const adminCount = countResult[0].adminCount || 0;
+
+         res.json({
+            totalUsers,
+            adminCount,
+            maxUsers,
+            maxAdmin,
+            staffCount: totalUsers - adminCount
+         });
+
+      });
+
    });
 };

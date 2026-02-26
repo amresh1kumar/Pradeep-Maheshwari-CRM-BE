@@ -18,13 +18,8 @@ exports.createLead = (req, res) => {
       email,
       source,
       status,
-      assigned_to,
-      project_name
+      assigned_to
    } = req.body;
-
-   if (!project_name) {
-      return res.status(400).json({ message: "Project name is required" });
-   }
 
    const assignUserId =
       req.user.role === "admin"
@@ -34,64 +29,257 @@ exports.createLead = (req, res) => {
    const finalStatus = status || "New";
    const finalSource = source || "Website";
 
-   const trimmedProject = project_name.trim();
-
-   // 🔹 Step 1: Check if project exists
    db.query(
-      "SELECT id FROM projects WHERE name=?",
-      [trimmedProject],
-      (err, projectResult) => {
+      `INSERT INTO leads
+       (name, phone, email, source, status, assigned_to, created_by, project_id)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [
+         name,
+         phone,
+         email,
+         finalSource,
+         finalStatus,
+         assignUserId,
+         req.user.id,
+         null   // 🔥 Project initially NULL
+      ],
+      (err) => {
 
          if (err) return res.status(500).json(err);
 
-         const createLeadWithProject = (projectId) => {
-
-            db.query(
-               `INSERT INTO leads
-               (name, phone, email, source, status, assigned_to, created_by, project_id)
-               VALUES (?,?,?,?,?,?,?,?)`,
-               [
-                  name,
-                  phone,
-                  email,
-                  finalSource,
-                  finalStatus,
-                  assignUserId,
-                  req.user.id,
-                  projectId
-               ],
-               (err) => {
-
-                  if (err) return res.status(500).json(err);
-
-                  res.json({ message: "Lead created successfully" });
-               }
-            );
-         };
-
-         // 🔹 If project exists
-         if (projectResult.length > 0) {
-            return createLeadWithProject(projectResult[0].id);
-         }
-
-         // 🔹 Else create new project
-         db.query(
-            "INSERT INTO projects (name) VALUES (?)",
-            [trimmedProject],
-            (err, insertResult) => {
-
-               if (err) return res.status(500).json(err);
-
-               createLeadWithProject(insertResult.insertId);
-            }
-         );
+         res.json({ message: "Lead created successfully" });
       }
    );
 };
 
+// exports.getLeads = (req, res) => {
+
+//    const { page = 1, limit = 10, status, search, project_id,assigned } = req.query;
+//    const offset = (page - 1) * limit;
+
+//    let query = `
+//       SELECT 
+//          leads.*,
+//          users.name AS assigned_user,
+//          creator.name AS created_by_name,
+//          p.name AS project_name
+//       FROM leads
+//       LEFT JOIN users ON leads.assigned_to = users.id
+//       LEFT JOIN users creator ON leads.created_by = creator.id
+//       LEFT JOIN projects p ON leads.project_id = p.id
+//    `;
+
+//    const params = [];
+//    const conditions = [];
+
+//    // 🔒 Staff restriction
+//    if (req.user.role !== "admin") {
+//       conditions.push("leads.assigned_to = ?");
+//       params.push(req.user.id);
+//    }
+
+//    // 📁 Project filter
+//    if (project_id) {
+//       conditions.push("leads.project_id = ?");
+//       params.push(project_id);
+//    }
+
+//    // 🔍 Status filter
+//    if (status) {
+//       conditions.push("leads.status = ?");
+//       params.push(status);
+//    }
+
+//    // 🔎 Global Search
+//    if (search) {
+//       conditions.push(`
+//          (
+//             leads.name LIKE ? OR
+//             leads.phone LIKE ? OR
+//             leads.email LIKE ?
+//          )
+//       `);
+//       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+//    }
+
+//    if (conditions.length > 0) {
+//       query += " WHERE " + conditions.join(" AND ");
+//    }
+
+//    query += " ORDER BY leads.created_at DESC LIMIT ? OFFSET ?";
+//    params.push(Number(limit), Number(offset));
+
+//    db.query(query, params, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+
+//       // COUNT QUERY
+//       let countQuery = `
+//          SELECT COUNT(*) AS total
+//          FROM leads
+//       `;
+
+//       const countParams = [];
+//       const countConditions = [];
+
+//       if (req.user.role !== "admin") {
+//          countConditions.push("leads.assigned_to = ?");
+//          countParams.push(req.user.id);
+//       }
+
+//       if (project_id) {
+//          countConditions.push("leads.project_id = ?");
+//          countParams.push(project_id);
+//       }
+
+//       if (status) {
+//          countConditions.push("leads.status = ?");
+//          countParams.push(status);
+//       }
+
+//       if (search) {
+//          countConditions.push(`
+//             (
+//                leads.name LIKE ? OR
+//                leads.phone LIKE ? OR
+//                leads.email LIKE ?
+//             )
+//          `);
+//          countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+//       }
+
+//       if (countConditions.length > 0) {
+//          countQuery += " WHERE " + countConditions.join(" AND ");
+//       }
+
+//       db.query(countQuery, countParams, (err, countResult) => {
+//          if (err) return res.status(500).json(err);
+
+//          res.json({
+//             data: result,
+//             total: countResult[0].total
+//          });
+//       });
+
+//    });
+// };
+
+// exports.getLeads = (req, res) => {
+
+//    const { page = 1, limit = 10, status, search, project_id,assigned } = req.query;
+//    const offset = (page - 1) * limit;
+
+//    let query = `
+//       SELECT 
+//          leads.*,
+//          users.name AS assigned_user,
+//          creator.name AS created_by_name,
+//          p.name AS project_name
+//       FROM leads
+//       LEFT JOIN users ON leads.assigned_to = users.id
+//       LEFT JOIN users creator ON leads.created_by = creator.id
+//       LEFT JOIN projects p ON leads.project_id = p.id
+//    `;
+
+//    const params = [];
+//    const conditions = [];
+
+//    // 🔒 Staff restriction
+//    if (req.user.role !== "admin") {
+//       conditions.push("leads.assigned_to = ?");
+//       params.push(req.user.id);
+//    }
+
+//    // 📁 Project filter
+//    if (project_id) {
+//       conditions.push("leads.project_id = ?");
+//       params.push(project_id);
+//    }
+
+//    // 🔍 Status filter
+//    if (status) {
+//       conditions.push("leads.status = ?");
+//       params.push(status);
+//    }
+
+//    // 🔎 Global Search
+//    if (search) {
+//       conditions.push(`
+//          (
+//             leads.name LIKE ? OR
+//             leads.phone LIKE ? OR
+//             leads.email LIKE ?
+//          )
+//       `);
+//       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+//    }
+
+//    if (conditions.length > 0) {
+//       query += " WHERE " + conditions.join(" AND ");
+//    }
+
+//    query += " ORDER BY leads.created_at DESC LIMIT ? OFFSET ?";
+//    params.push(Number(limit), Number(offset));
+
+//    db.query(query, params, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+
+//       // COUNT QUERY
+//       let countQuery = `
+//          SELECT COUNT(*) AS total
+//          FROM leads
+//       `;
+
+//       const countParams = [];
+//       const countConditions = [];
+
+//       if (req.user.role !== "admin") {
+//          countConditions.push("leads.assigned_to = ?");
+//          countParams.push(req.user.id);
+//       }
+
+//       if (project_id) {
+//          countConditions.push("leads.project_id = ?");
+//          countParams.push(project_id);
+//       }
+
+//       if (status) {
+//          countConditions.push("leads.status = ?");
+//          countParams.push(status);
+//       }
+
+//       if (search) {
+//          countConditions.push(`
+//             (
+//                leads.name LIKE ? OR
+//                leads.phone LIKE ? OR
+//                leads.email LIKE ?
+//             )
+//          `);
+//          countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+//       }
+
+//       if (countConditions.length > 0) {
+//          countQuery += " WHERE " + countConditions.join(" AND ");
+//       }
+
+//       db.query(countQuery, countParams, (err, countResult) => {
+//          if (err) return res.status(500).json(err);
+
+//          res.json({
+//             data: result,
+//             total: countResult[0].total
+//          });
+//       });
+
+//    });
+// };
+
+
 exports.getLeads = (req, res) => {
 
-   const { page = 1, limit = 10, status, search, project_id } = req.query;
+   const { page = 1, limit = 10, status, search, project_id, assigned } = req.query;
    const offset = (page - 1) * limit;
 
    let query = `
@@ -113,6 +301,11 @@ exports.getLeads = (req, res) => {
    if (req.user.role !== "admin") {
       conditions.push("leads.assigned_to = ?");
       params.push(req.user.id);
+   }
+
+   // 🔥 Unassigned Filter (ADMIN ONLY)
+   if (assigned === "unassigned" && req.user.role === "admin") {
+      conditions.push("leads.assigned_to IS NULL");
    }
 
    // 📁 Project filter
@@ -150,7 +343,8 @@ exports.getLeads = (req, res) => {
 
       if (err) return res.status(500).json(err);
 
-      // COUNT QUERY
+      // ================= COUNT QUERY =================
+
       let countQuery = `
          SELECT COUNT(*) AS total
          FROM leads
@@ -162,6 +356,11 @@ exports.getLeads = (req, res) => {
       if (req.user.role !== "admin") {
          countConditions.push("leads.assigned_to = ?");
          countParams.push(req.user.id);
+      }
+
+      // 🔥 Same unassigned filter for count
+      if (assigned === "unassigned" && req.user.role === "admin") {
+         countConditions.push("leads.assigned_to IS NULL");
       }
 
       if (project_id) {
@@ -204,22 +403,9 @@ exports.getLeads = (req, res) => {
 exports.updateLead = (req, res) => {
 
    const { id } = req.params;
-
-   const {
-      name,
-      phone,
-      email,
-      source,
-      status,
-      assigned_to,
-      project_id
-   } = req.body;
+   const { name, phone, email, source, status, assigned_to, project_id } = req.body;
 
    const io = req.app.get("io");
-
-   if (!project_id) {
-      return res.status(400).json({ message: "Project selection is required" });
-   }
 
    db.query(
       "SELECT * FROM leads WHERE id=?",
@@ -232,78 +418,58 @@ exports.updateLead = (req, res) => {
 
          const oldLead = oldResult[0];
 
-         const newStatus = status ?? oldLead.status;
+         let updatedName = oldLead.name;
+         let updatedPhone = oldLead.phone;
+         let updatedEmail = oldLead.email;
+         let updatedSource = oldLead.source;
+         let updatedAssigned = oldLead.assigned_to;
+         let updatedProject = oldLead.project_id;
+         let updatedStatus = oldLead.status;
 
-         const newAssigned =
-            req.user.role === "admin"
-               ? assigned_to ?? oldLead.assigned_to
-               : oldLead.assigned_to;
+         // 🔥 STAFF → Only status change allowed
+         if (req.user.role === "staff") {
+
+            if (!status) {
+               return res.status(400).json({
+                  message: "Staff can only update status"
+               });
+            }
+
+            updatedStatus = status;
+
+         } else {
+
+            // 🔥 ADMIN → Full control
+            updatedName = name ?? oldLead.name;
+            updatedPhone = phone ?? oldLead.phone;
+            updatedEmail = email ?? oldLead.email;
+            updatedSource = source ?? oldLead.source;
+            updatedAssigned = assigned_to ?? oldLead.assigned_to;
+            updatedProject = project_id ?? oldLead.project_id;
+            updatedStatus = status ?? oldLead.status;
+         }
 
          db.query(
             `UPDATE leads
              SET name=?, phone=?, email=?, source=?, status=?, assigned_to=?, project_id=?
              WHERE id=?`,
             [
-               name ?? oldLead.name,
-               phone ?? oldLead.phone,
-               email ?? oldLead.email,
-               source ?? oldLead.source,
-               newStatus,
-               newAssigned,
-               project_id,
+               updatedName,
+               updatedPhone,
+               updatedEmail,
+               updatedSource,
+               updatedStatus,
+               updatedAssigned,
+               updatedProject,
                id
             ],
             (err) => {
 
                if (err) return res.status(500).json(err);
 
-
-               if (newAssigned && newAssigned !== oldLead.assigned_to) {
-
-                  const message = `New Lead Assigned: ${oldLead.name}`;
-
-                  db.query(
-                     `INSERT INTO notifications (user_id, message, type)
-                      VALUES (?, ?, 'assignment')`,
-                     [newAssigned, message]
-                  );
-
-                  io.to(`user_${newAssigned}`).emit("newNotification", {
-                     message,
-                     type: "assignment"
-                  });
-
-                  addActivity(id, req.user.id, "Lead Assigned");
-               }
-
-               if (newStatus !== oldLead.status) {
-
-                  // Optional: notify assigned user on status change
-                  if (oldLead.assigned_to) {
-                     const statusMessage =
-                        `Lead "${oldLead.name}" status changed to ${newStatus}`;
-
-                     db.query(
-                        `INSERT INTO notifications (user_id, message, type)
-                         VALUES (?, ?, 'status_change')`,
-                        [oldLead.assigned_to, statusMessage]
-                     );
-
-                     io.to(`user_${oldLead.assigned_to}`).emit("newNotification", {
-                        message: statusMessage,
-                        type: "status_change"
-                     });
-                  }
-
-                  addActivity(id, req.user.id, `Status changed to ${newStatus}`);
-               }
-
-               /* ===============================
-                  📁 3. Project Change Activity
-               ================================ */
-
-               if (project_id !== oldLead.project_id) {
-                  addActivity(id, req.user.id, "Project Changed");
+               // 🔄 Status change activity
+               if (updatedStatus !== oldLead.status) {
+                  addActivity(id, req.user.id, `Status changed to ${updatedStatus}`);
                }
 
                res.json({ message: "Lead updated successfully" });
@@ -311,7 +477,7 @@ exports.updateLead = (req, res) => {
          );
       }
    );
-};;
+};
 
 exports.getSingleLead = (req, res) => {
 
@@ -384,42 +550,16 @@ exports.importLeadsFromExcel = async (req, res) => {
 
       for (const row of sheetData) {
 
-         // ✅ Trim & sanitize
          const Name = row.Name?.toString().trim() || null;
          const Phone = row.Phone?.toString().trim() || null;
          const Email = row.Email?.toString().trim() || null;
          const Source = row.Source?.toString().trim() || "Website";
-         const Project = row.Project?.toString().trim() || null;
-
-         if (!Project) {
-            skipped++;
-            continue;
-         }
 
          if (!Email && !Phone) {
             skipped++;
             continue;
          }
 
-         // ✅ Get or Create Project
-         let projectId;
-
-         const [projectResult] = await db.promise().query(
-            "SELECT id FROM projects WHERE name = ?",
-            [Project]
-         );
-
-         if (projectResult.length > 0) {
-            projectId = projectResult[0].id;
-         } else {
-            const [insertProject] = await db.promise().query(
-               "INSERT INTO projects (name) VALUES (?)",
-               [Project]
-            );
-            projectId = insertProject.insertId;
-         }
-
-         // ✅ Duplicate Detection (Safe)
          let checkQuery = "SELECT id FROM leads WHERE ";
          let checkParams = [];
 
@@ -438,15 +578,13 @@ exports.importLeadsFromExcel = async (req, res) => {
 
          if (existing.length > 0) {
 
-            // 🔄 UPDATE
             await db.promise().query(
                `UPDATE leads 
-                SET name=?, source=?, project_id=? 
+                SET name=?, source=? 
                 WHERE id=?`,
                [
                   Name,
                   Source,
-                  projectId,
                   existing[0].id
                ]
             );
@@ -455,7 +593,6 @@ exports.importLeadsFromExcel = async (req, res) => {
 
          } else {
 
-            // ➕ INSERT
             await db.promise().query(
                `INSERT INTO leads
                 (name, phone, email, source, status, assigned_to, created_by, project_id)
@@ -466,15 +603,14 @@ exports.importLeadsFromExcel = async (req, res) => {
                   Email,
                   Source,
                   "New",
+                  null,
                   req.user.id,
-                  req.user.id,
-                  projectId
+                  null   
                ]
             );
 
             inserted++;
          }
-
       }
 
       fs.unlinkSync(req.file.path);
@@ -492,6 +628,7 @@ exports.importLeadsFromExcel = async (req, res) => {
    } catch (error) {
 
       console.error(error);
+
       if (req.file && fs.existsSync(req.file.path)) {
          fs.unlinkSync(req.file.path);
       }
@@ -502,65 +639,6 @@ exports.importLeadsFromExcel = async (req, res) => {
       });
    }
 };
-
-
-// exports.exportLeads = (req, res) => {
-
-//    let query = `
-//       SELECT 
-//          leads.name AS Name,
-//          leads.phone AS Phone,
-//          leads.email AS Email,
-//          leads.source AS Source,
-//          leads.status AS Status,
-//          p.name AS Project,
-//          u1.name AS Assigned_To,
-//          u2.name AS Created_By
-//       FROM leads
-//       LEFT JOIN users u1 ON leads.assigned_to = u1.id
-//       LEFT JOIN users u2 ON leads.created_by = u2.id
-//       LEFT JOIN projects p ON leads.project_id = p.id
-//    `;
-
-//    const params = [];
-
-//    // 🔒 Staff restriction
-//    if (req.user.role !== "admin") {
-//       query += " WHERE leads.assigned_to = ?";
-//       params.push(req.user.id);
-//    }
-
-//    db.query(query, params, (err, result) => {
-
-//       if (err) return res.status(500).json(err);
-
-//       if (!result.length) {
-//          return res.status(400).json({ message: "No leads found" });
-//       }
-
-//       const worksheet = XLSX.utils.json_to_sheet(result);
-//       const workbook = XLSX.utils.book_new();
-
-//       XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
-
-//       const buffer = XLSX.write(workbook, {
-//          type: "buffer",
-//          bookType: "xlsx"
-//       });
-
-//       res.setHeader(
-//          "Content-Disposition",
-//          "attachment; filename=Leads.xlsx"
-//       );
-
-//       res.setHeader(
-//          "Content-Type",
-//          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-//       );
-
-//       res.send(buffer);
-//    });
-// };
 
 exports.exportLeads = (req, res) => {
 
@@ -594,7 +672,10 @@ exports.exportLeads = (req, res) => {
       if (!result.length) {
          return res.status(400).json({ message: "No leads found" });
       }
-
+      result = result.map(row => ({
+         ...row,
+         Project: row.Project || "Unassigned"
+      }));
       const worksheet = XLSX.utils.json_to_sheet(result);
 
       const headers = Object.keys(result[0]);
@@ -786,5 +867,74 @@ exports.getLeadActivities = (req, res) => {
       }
    );
 };
+
+exports.bulkAssignLeads = (req, res) => {
+
+   const { leadIds, assigned_to } = req.body;
+   const io = req.app.get("io");
+
+   if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ message: "Please select at least one lead" });
+   }
+
+   if (!assigned_to) {
+      return res.status(400).json({ message: "Please select user to assign" });
+   }
+
+   db.query(
+      "SELECT id, name FROM users WHERE id = ?",
+      [assigned_to],
+      (err, userResult) => {
+
+         if (err) return res.status(500).json(err);
+         if (!userResult.length)
+            return res.status(404).json({ message: "User not found" });
+
+         const placeholders = leadIds.map(() => "?").join(",");
+
+         const query = `
+            UPDATE leads
+            SET assigned_to = ?
+            WHERE id IN (${placeholders})
+            AND assigned_to IS NULL
+         `;
+
+         db.query(
+            query,
+            [assigned_to, ...leadIds],
+            (err, result) => {
+
+               if (err) return res.status(500).json(err);
+
+               const updated = result.affectedRows;
+               const skipped = leadIds.length - updated;
+
+               if (updated > 0) {
+                  const notificationMessage =
+                     `${updated} Leads Assigned to You`;
+
+                  db.query(
+                     `INSERT INTO notifications (user_id, message, type)
+                      VALUES (?, ?, 'bulk_assignment')`,
+                     [assigned_to, notificationMessage]
+                  );
+
+                  io.to(`user_${assigned_to}`).emit("newNotification", {
+                     message: notificationMessage,
+                     type: "bulk_assignment"
+                  });
+               }
+
+               res.json({
+                  updated,
+                  skipped,
+                  message: `${updated} assigned, ${skipped} skipped`
+               });
+            }
+         );
+      }
+   );
+};
+
 
 

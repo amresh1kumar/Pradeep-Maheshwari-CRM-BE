@@ -114,6 +114,15 @@ const initTables = () => {
       )
    `);
 
+
+   db.query(`
+      CREATE TABLE IF NOT EXISTS app_config (
+         id INT PRIMARY KEY AUTO_INCREMENT,
+         max_users INT DEFAULT 10,
+         max_admin INT DEFAULT 2
+      )
+   `);
+
    console.log("All tables checked/created successfully");
 };
 

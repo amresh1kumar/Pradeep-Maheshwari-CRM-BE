@@ -1,19 +1,53 @@
 const db = require("../config/db");
 
+// exports.getProjects = (req, res) => {
+
+//    db.query(`
+//       SELECT 
+//          p.id,
+//          p.name,
+//          COUNT(l.id) AS lead_count
+//       FROM projects p
+//       LEFT JOIN leads l ON l.project_id = p.id
+//       GROUP BY p.id
+//       ORDER BY p.name ASC
+//    `, (err, result) => {
+
+//       if (err) return res.status(500).json(err);
+//       res.json(result);
+
+//    });
+
+// };
+
 exports.getProjects = (req, res) => {
 
-   db.query(`
+   let query = `
       SELECT 
          p.id,
          p.name,
          COUNT(l.id) AS lead_count
       FROM projects p
       LEFT JOIN leads l ON l.project_id = p.id
+   `;
+
+   const params = [];
+
+   // 🔒 Staff restriction
+   if (req.user.role !== "admin") {
+      query += " WHERE l.assigned_to = ?";
+      params.push(req.user.id);
+   }
+
+   query += `
       GROUP BY p.id
       ORDER BY p.name ASC
-   `, (err, result) => {
+   `;
+
+   db.query(query, params, (err, result) => {
 
       if (err) return res.status(500).json(err);
+
       res.json(result);
 
    });
@@ -21,19 +55,6 @@ exports.getProjects = (req, res) => {
 };
 
 
-
-// exports.getProjects = (req, res) => {
-
-//    db.query(
-//       "SELECT * FROM projects ORDER BY created_at DESC",
-//       (err, result) => {
-//          if (err) return res.status(500).json(err);
-//          res.json(result);
-//       }
-//    );
-// };
-
-// ✅ Create Project (Admin Only)
 exports.createProject = (req, res) => {
 
    const { name, location } = req.body;
@@ -59,7 +80,6 @@ exports.createProject = (req, res) => {
    );
 };
 
-// ✅ Update Project (Admin Only)
 exports.updateProject = (req, res) => {
 
    const { id } = req.params;
