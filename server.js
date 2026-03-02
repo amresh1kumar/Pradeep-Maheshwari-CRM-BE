@@ -3,8 +3,8 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 require("dotenv").config();
-
-/* ROUTES */
+const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const leadRoutes = require("./routes/leadRoutes");
@@ -19,7 +19,6 @@ const projectRoutes = require("./routes/projectRoutes")
 const initTables = require("./config/initTables");
 const generateFollowupNotifications = require("./utils/followupNotifier");
 
-/* APP */
 const app = express();
 const server = http.createServer(app);
 
@@ -40,7 +39,6 @@ const io = new Server(server, {
    }
 });
 
-/* Make io available globally */
 app.set("io", io);
 
 /* Socket Connection */
@@ -58,7 +56,6 @@ io.on("connection", (socket) => {
 });
 
 /* MIDDLEWARE */
-// app.use(cors());
 app.use(
    cors({
       // origin: "http://localhost:3000",
@@ -68,7 +65,19 @@ app.use(
 );
 app.use(express.json());
 
+
+app.use(helmet());
 /* ROUTES */
+const loginLimiter = rateLimit({
+   windowMs: 15 * 60 * 1000,
+   max: 10,
+   message: {
+      message: "Too many login attempts. Try again after 15 minutes."
+   }
+});
+
+/* ROUTES */
+app.use("/api/login", loginLimiter);
 app.use("/api", authRoutes);
 app.use("/api", dashboardRoutes);
 app.use("/api", leadRoutes);

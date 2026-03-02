@@ -31,7 +31,7 @@ exports.login = (req, res) => {
       const token = jwt.sign(
          { id: user.id, role: user.role_name },
          process.env.JWT_SECRET,
-         { expiresIn: "1d" }
+         { expiresIn: process.env.JWT_EXPIRES_IN }
       );
 
       res.json({
@@ -45,41 +45,6 @@ exports.login = (req, res) => {
       });
    });
 };
-
-
-// exports.register = (req, res) => {
-//    const { name, email, password } = req.body;
-
-//    db.query("SELECT * FROM users WHERE email = ?", [email], async (err, result) => {
-//       if (err) return res.status(500).json({ message: "Server error" });
-
-//       if (result.length > 0) {
-//          return res.status(400).json({ message: "Email already exists" });
-//       }
-
-//       db.query("SELECT id FROM roles WHERE role_name = ?", ["staff"], async (err, roleResult) => {
-//          if (err) return res.status(500).json({ message: "Server error" });
-
-//          if (roleResult.length === 0) {
-//             return res.status(500).json({ message: "Default role not found" });
-//          }
-
-//          const role_id = roleResult[0].id;
-
-//          const hashedPassword = await bcrypt.hash(password, 10);
-
-//          db.query(
-//             "INSERT INTO users (name,email,password,role_id) VALUES (?,?,?,?)",
-//             [name, email, hashedPassword, role_id],
-//             (err) => {
-//                if (err) return res.status(500).json({ message: "Server error" });
-
-//                res.json({ message: "User registered successfully" });
-//             }
-//          );
-//       });
-//    });
-// };
 
 
 exports.register = (req, res) => {
