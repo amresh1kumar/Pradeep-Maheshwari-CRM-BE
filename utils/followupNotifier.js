@@ -1,34 +1,90 @@
 
+// const db = require("../config/db");
+
+// const generateFollowupNotifications = (app) => {
+
+//    const io = app.get("io");
+
+//    const query = `
+//       SELECT 
+//          f.id,
+//          DATE(f.next_followup_date) AS next_date,
+//          l.name AS lead_name,
+//          l.assigned_to AS user_id
+//       FROM followups f
+//       JOIN leads l ON f.lead_id = l.id
+//       WHERE DATE(f.next_followup_date) <= CURDATE()
+//    `;
+
+//    db.query(query, (err, followups) => {
+
+//       if (err) {
+//          console.log("Followup check error:", err);
+//          return;
+//       }
+
+//       followups.forEach(followup => {
+
+//          const message = `Follow-up reminder for Lead: ${followup.lead_name}`;
+
+//          // Insert into DB
+//          db.query(
+//             `INSERT INTO notifications (user_id, message, type)
+//              VALUES (?, ?, 'followup')`,
+//             [followup.user_id, message]
+//          );
+
+//          // 🔥 Real-time emit
+//          io.to(`user_${followup.user_id}`).emit("newNotification", {
+//             message,
+//             type: "followup"
+//          });
+
+//       });
+
+//    });
+// };
+
+// module.exports = generateFollowupNotifications;
+
+
 const db = require("../config/db");
 
-const generateFollowupNotifications = (app) => {
+const generateFollowupNotifications = async (app) => {
+   try {
 
-   const io = app.get("io");
+      const io = app.get("io");
 
-   const query = `
-      SELECT 
-         f.id,
-         DATE(f.next_followup_date) AS next_date,
-         l.name AS lead_name,
-         l.assigned_to AS user_id
-      FROM followups f
-      JOIN leads l ON f.lead_id = l.id
-      WHERE DATE(f.next_followup_date) <= CURDATE()
-   `;
+      const query = `
+         SELECT 
+            f.id,
+            DATE(f.next_followup_date) AS next_date,
+            l.name AS lead_name,
+            l.assigned_to AS user_id
+         FROM followups f
+         JOIN leads l ON f.lead_id = l.id
+         WHERE DATE(f.next_followup_date) <= CURDATE()
+      `;
 
-   db.query(query, (err, followups) => {
+      const [followups] = await db.query(query);
 
-      if (err) {
-         console.log("Followup check error:", err);
-         return;
-      }
+      for (const followup of followups) {
 
-      followups.forEach(followup => {
+         if (!followup.user_id) continue;
 
          const message = `Follow-up reminder for Lead: ${followup.lead_name}`;
 
-         // Insert into DB
-         db.query(
+         // ✅ Prevent duplicate notification spam
+         const [existing] = await db.query(
+            `SELECT id FROM notifications 
+             WHERE user_id=? AND message=? AND DATE(created_at)=CURDATE()`,
+            [followup.user_id, message]
+         );
+
+         if (existing.length) continue;
+
+         // Insert notification
+         await db.query(
             `INSERT INTO notifications (user_id, message, type)
              VALUES (?, ?, 'followup')`,
             [followup.user_id, message]
@@ -39,10 +95,11 @@ const generateFollowupNotifications = (app) => {
             message,
             type: "followup"
          });
+      }
 
-      });
-
-   });
+   } catch (err) {
+      console.error("Followup notifier error:", err);
+   }
 };
 
 module.exports = generateFollowupNotifications;

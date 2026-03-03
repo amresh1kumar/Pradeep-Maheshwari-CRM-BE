@@ -1,70 +1,81 @@
-// const db = require("../config/db");
-
-// exports.getNotifications = (req, res) => {
-
-//    db.query(
-//       "SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 10",
-//       [req.user.id],
-//       (err, result) => {
-//          if (err) return res.status(500).json(err);
-//          res.json(result);
-//       }
-//    );
-// };
-
-// exports.markAsRead = (req, res) => {
-
-//    db.query(
-//       "UPDATE notifications SET is_read=TRUE WHERE id=?",
-//       [req.params.id],
-//       (err) => {
-//          if (err) return res.status(500).json(err);
-//          res.json({ message: "Marked as read" });
-//       }
-//    );
-// };
-
-
 const db = require("../config/db");
 
-exports.getNotifications = (req, res) => {
+exports.getNotifications = async (req, res) => {
+   try {
 
-   db.query(
-      `SELECT * FROM notifications
-       WHERE user_id = ?
-       ORDER BY created_at DESC`,
-      [req.user.id],
-      (err, result) => {
-         if (err) return res.status(500).json(err);
-         res.json(result);
-      }
-   );
+      const userId = req.user.id;
+
+      const [result] = await db.query(`
+         SELECT *
+         FROM notifications
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+      `, [userId]);
+
+      res.json(result);
+
+   } catch (error) {
+
+      console.error("Get Notifications Error:", error.message);
+
+      res.status(500).json({
+         message: "Server error"
+      });
+   }
 };
 
-exports.markAsRead = (req, res) => {
+exports.markAsRead = async (req, res) => {
+   try {
 
-   const { id } = req.params;
+      const { id } = req.params;
+      const userId = req.user.id;
 
-   db.query(
-      `UPDATE notifications
-       SET is_read = 1
-       WHERE id = ? AND user_id = ?`,
-      [id, req.user.id],
-      (err) => {
-         if (err) return res.status(500).json(err);
-         res.json({ message: "Marked as read" });
+      const [result] = await db.query(`
+         UPDATE notifications
+         SET is_read = 1
+         WHERE id = ? AND user_id = ?
+      `, [id, userId]);
+
+      if (result.affectedRows === 0) {
+         return res.status(404).json({
+            message: "Notification not found"
+         });
       }
-   );
+
+      res.json({
+         message: "Marked as read"
+      });
+
+   } catch (error) {
+
+      console.error("Mark As Read Error:", error.message);
+
+      res.status(500).json({
+         message: "Server error"
+      });
+   }
 };
 
-exports.clearAll = (req, res) => {
+exports.clearAll = async (req, res) => {
+   try {
 
-   db.query(
-      `DELETE FROM notifications WHERE user_id = ?`,
-      [req.user.id],
-      (err) => {
-         if (err) return res.status(500).json(err);
-         res.json({ message: "All cleared" });
-      }
-   );
+      const userId = req.user.id;
+
+      await db.query(`
+         DELETE FROM notifications
+         WHERE user_id = ?
+      `, [userId]);
+
+      res.json({
+         message: "All cleared"
+      });
+
+   } catch (error) {
+
+      console.error("Clear Notifications Error:", error.message);
+
+      res.status(500).json({
+         message: "Server error"
+      });
+   }
 };
