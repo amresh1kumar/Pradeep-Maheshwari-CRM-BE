@@ -69,13 +69,15 @@ setInterval(() => {
    generateFollowupNotifications(app);
 }, 60000);
 
+const PORT = process.env.PORT || 5000;
+
 (async () => {
    try {
       await initTables();
       console.log("Database initialized");
 
       server.listen(process.env.PORT, () => {
-         console.log(`Server running on port ${process.env.PORT}`);
+         console.log(`Server running on port ${PORT}`);
       });
 
    } catch (err) {
