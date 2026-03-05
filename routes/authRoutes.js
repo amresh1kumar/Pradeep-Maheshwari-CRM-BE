@@ -1,12 +1,23 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const router = express.Router();
-const { login, register,forgotPassword,resetPassword } = require("../controllers/authController");
+const { login, register, forgotPassword, resetPassword } = require("../controllers/authController");
 
+
+// const loginLimiter = rateLimit({
+//    windowMs: 15 * 60 * 1000,
+//    max: 10,
+//    message: {
+//       message: "Too many login attempts. Try again after 15 minutes."
+//    }
+// });
 
 const loginLimiter = rateLimit({
    windowMs: 15 * 60 * 1000,
    max: 10,
+   keyGenerator: (req) => {
+      return `${req.ip}-${req.body.email}`;
+   },
    message: {
       message: "Too many login attempts. Try again after 15 minutes."
    }
