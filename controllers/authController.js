@@ -38,6 +38,24 @@ exports.login = async (req, res) => {
          });
       }
 
+      if (!user.is_approved) {
+         return res.status(403).json({
+            message: "Account pending admin approval"
+         });
+      }
+
+      // if (user.status === "pending") {
+      //    return res.status(403).json({
+      //       message: "Account pending admin approval"
+      //    });
+      // }
+
+      if (user.status === "disabled") {
+         return res.status(403).json({
+            message: "Account temporarily disabled. Contact admin."
+         });
+      }
+
       const token = jwt.sign(
          { id: user.id, role: user.role_name },
          process.env.JWT_SECRET,
@@ -64,6 +82,98 @@ exports.login = async (req, res) => {
 
    }
 };
+
+// exports.register = async (req, res) => {
+//    try {
+
+//       const { name, email, password } = req.body;
+
+//       if (!name || !email || !password) {
+//          return res.status(400).json({
+//             message: "All fields are required"
+//          });
+//       }
+
+//       // 🔹 1️⃣ Get App Config
+//       const [configRows] = await db.query(
+//          "SELECT * FROM app_config LIMIT 1"
+//       );
+
+//       if (!configRows.length) {
+//          return res.status(500).json({
+//             message: "App config not initialized"
+//          });
+//       }
+
+//       const { max_users, max_admin } = configRows[0];
+
+//       // 🔹 2️⃣ Count Current Users
+//       const [countRows] = await db.query(`
+//          SELECT 
+//             COUNT(*) AS totalUsers,
+//             SUM(CASE WHEN roles.role_name = 'admin' THEN 1 ELSE 0 END) AS adminCount
+//          FROM users
+//          JOIN roles ON users.role_id = roles.id
+//       `);
+
+//       const totalUsers = countRows[0].totalUsers;
+//       const adminCount = countRows[0].adminCount || 0;
+
+//       if (totalUsers >= max_users) {
+//          return res.status(400).json({
+//             message: `Maximum ${max_users} users allowed`
+//          });
+//       }
+
+//       // 🔹 3️⃣ Check Duplicate Email
+//       const [existing] = await db.query(
+//          "SELECT id FROM users WHERE email = ?",
+//          [email]
+//       );
+
+//       if (existing.length > 0) {
+//          return res.status(400).json({
+//             message: "Email already exists"
+//          });
+//       }
+
+//       // 🔹 4️⃣ Get Staff Role ID
+//       const [roleRows] = await db.query(
+//          "SELECT id FROM roles WHERE role_name = 'staff'"
+//       );
+
+//       if (!roleRows.length) {
+//          return res.status(500).json({
+//             message: "Default role not found"
+//          });
+//       }
+
+//       const role_id = roleRows[0].id;
+
+//       // 🔹 5️⃣ Hash Password
+//       const hashedPassword = await bcrypt.hash(password, 10);
+
+//       // 🔹 6️⃣ Insert User
+//       await db.query(
+//          "INSERT INTO users (name, email, password, role_id,is_approved) VALUES (?,?,?,?,0)",
+//          [name, email, hashedPassword, role_id]
+//       );
+
+//       res.json({
+//          message: "Registration submitted. Wait for admin approval."
+//       });
+
+//    } catch (error) {
+
+//       console.error("Register Error:", error.message);
+
+//       res.status(500).json({
+//          message: "Server error"
+//       });
+
+//    }
+// };
+
 
 exports.register = async (req, res) => {
    try {
@@ -135,14 +245,42 @@ exports.register = async (req, res) => {
       // 🔹 5️⃣ Hash Password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // 🔹 6️⃣ Insert User
+      // 🔹 6️⃣ Insert User (pending approval)
       await db.query(
-         "INSERT INTO users (name, email, password, role_id) VALUES (?,?,?,?)",
+         "INSERT INTO users (name, email, password, role_id, is_approved,status) VALUES (?,?,?,?,0,'active')",
          [name, email, hashedPassword, role_id]
       );
 
+      // 🔔 7️⃣ Notify Admins
+      const io = req.app.get("io");
+
+      const message = `New user registration request: ${name}`;
+
+      const [admins] = await db.query(`
+         SELECT users.id
+         FROM users
+         JOIN roles ON users.role_id = roles.id
+         WHERE roles.role_name = 'admin'
+      `);
+
+      for (const admin of admins) {
+
+         // Insert notification
+         await db.query(
+            `INSERT INTO notifications (user_id, message, type)
+             VALUES (?, ?, 'user_registration')`,
+            [admin.id, message]
+         );
+
+         // Real-time notification
+         io.to(`user_${admin.id}`).emit("newNotification", {
+            message,
+            type: "user_registration"
+         });
+      }
+
       res.json({
-         message: "User registered successfully"
+         message: "Registration submitted. Wait for admin approval."
       });
 
    } catch (error) {

@@ -24,6 +24,8 @@ const initTables = async () => {
             email VARCHAR(100) UNIQUE,
             password VARCHAR(255),
             role_id INT,
+            is_approved BOOLEAN DEFAULT FALSE,
+            status ENUM('pending','active','disabled') DEFAULT 'pending',
             reset_token VARCHAR(255),
             reset_token_expiry DATETIME,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
