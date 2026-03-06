@@ -16,7 +16,7 @@ const addActivity = async (leadId, userId, action) => {
 
 exports.createLead = async (req, res) => {
    try {
-      const { name, phone, email, source, status, assigned_to } = req.body;
+      const { name, phone, status, assigned_to } = req.body;
 
       const assignUserId =
          req.user.role === "admin"
@@ -25,13 +25,11 @@ exports.createLead = async (req, res) => {
 
       await db.query(
          `INSERT INTO leads
-          (name, phone, email, source, status, assigned_to, created_by, project_id)
-          VALUES (?,?,?,?,?,?,?,?)`,
+          (name, phone,status, assigned_to, created_by, project_id)
+          VALUES (?,?,?,?,?,?)`,
          [
             name,
             phone,
-            email,
-            source || "Website",
             status || "New",
             assignUserId,
             req.user.id,
@@ -81,8 +79,8 @@ exports.getLeads = async (req, res) => {
       }
 
       if (search) {
-         conditions.push("(leads.name LIKE ? OR leads.phone LIKE ? OR leads.email LIKE ?)");
-         params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+         conditions.push("(leads.name LIKE ? OR leads.phone LIKE ?)");
+         params.push(`%${search}%`, `%${search}%`);
       }
 
       let whereClause = conditions.length
@@ -117,66 +115,13 @@ exports.getLeads = async (req, res) => {
    }
 };
 
-// exports.updateLead = async (req, res) => {
-//    try {
-//       const { id } = req.params;
-//       const { name, phone, email, source, status, assigned_to, project_id } = req.body;
-
-//       const [oldRows] = await db.query("SELECT * FROM leads WHERE id=?", [id]);
-//       if (!oldRows.length)
-//          return res.status(404).json({ message: "Lead not found" });
-
-//       const oldLead = oldRows[0];
-//       let updated = { ...oldLead };
-
-//       if (req.user.role === "staff") {
-//          if (!status)
-//             return res.status(400).json({ message: "Staff can only update status" });
-//          updated.status = status;
-//       } else {
-//          updated = {
-//             name: name ?? oldLead.name,
-//             phone: phone ?? oldLead.phone,
-//             email: email ?? oldLead.email,
-//             source: source ?? oldLead.source,
-//             status: status ?? oldLead.status,
-//             assigned_to: assigned_to ?? oldLead.assigned_to,
-//             project_id: project_id ?? oldLead.project_id
-//          };
-//       }
-
-//       await db.query(
-//          `UPDATE leads SET name=?, phone=?, email=?, source=?, status=?, assigned_to=?, project_id=? WHERE id=?`,
-//          [
-//             updated.name,
-//             updated.phone,
-//             updated.email,
-//             updated.source,
-//             updated.status,
-//             updated.assigned_to,
-//             updated.project_id,
-//             id
-//          ]
-//       );
-
-//       if (updated.status !== oldLead.status)
-//          await addActivity(id, req.user.id, `Status changed to ${updated.status}`);
-
-//       res.json({ message: "Lead updated successfully" });
-
-//    } catch (err) {
-//       console.error(err);
-//       res.status(500).json({ message: "Server error" });
-//    }
-// };
-
 exports.updateLead = async (req, res) => {
    const connection = await db.getConnection();
 
    try {
 
       const { id } = req.params;
-      const { name, phone, email, source, status, assigned_to, project_id } = req.body;
+      const { name, phone,status, assigned_to, project_id } = req.body;
       const io = req.app.get("io");
 
       await connection.beginTransaction();
@@ -204,8 +149,6 @@ exports.updateLead = async (req, res) => {
          updated = {
             name: name ?? oldLead.name,
             phone: phone ?? oldLead.phone,
-            email: email ?? oldLead.email,
-            source: source ?? oldLead.source,
             status: status ?? oldLead.status,
             assigned_to: assigned_to ?? oldLead.assigned_to,
             project_id: project_id ?? oldLead.project_id
@@ -214,13 +157,11 @@ exports.updateLead = async (req, res) => {
 
       await connection.query(
          `UPDATE leads 
-          SET name=?, phone=?, email=?, source=?, status=?, assigned_to=?, project_id=? 
+          SET name=?, phone=?,status=?, assigned_to=?, project_id=? 
           WHERE id=?`,
          [
             updated.name,
             updated.phone,
-            updated.email,
-            updated.source,
             updated.status,
             updated.assigned_to,
             updated.project_id,
@@ -354,27 +295,25 @@ exports.importLeadsFromExcel = async (req, res) => {
 
          const Name = row.Name?.toString().trim() || null;
          const Phone = row.Phone?.toString().trim() || null;
-         const Email = row.Email?.toString().trim() || null;
-         const Source = row.Source?.toString().trim() || "Website";
 
-         if (!Email && !Phone) {
+         if (!Phone) {
             skipped++;
             continue;
          }
 
-         let checkQuery = "SELECT id FROM leads WHERE ";
-         let checkParams = [];
+         let checkQuery = "SELECT id FROM leads WHERE phone=?";
+         let checkParams = [Phone];
 
-         if (Email && Phone) {
-            checkQuery += "(email = ? OR phone = ?)";
-            checkParams.push(Email, Phone);
-         } else if (Email) {
-            checkQuery += "email = ?";
-            checkParams.push(Email);
-         } else if (Phone) {
-            checkQuery += "phone = ?";
-            checkParams.push(Phone);
-         }
+         // if (Email && Phone) {
+         //    checkQuery += "(email = ? OR phone = ?)";
+         //    checkParams.push(Email, Phone);
+         // } else if (Email) {
+         //    checkQuery += "email = ?";
+         //    checkParams.push(Email);
+         // } else if (Phone) {
+         //    checkQuery += "phone = ?";
+         //    checkParams.push(Phone);
+         // }
 
          const [existing] = await db.query(checkQuery, checkParams);
 
@@ -382,11 +321,10 @@ exports.importLeadsFromExcel = async (req, res) => {
 
             await db.query(
                `UPDATE leads 
-                SET name=?, source=? 
+                SET name=?
                 WHERE id=?`,
                [
                   Name,
-                  Source,
                   existing[0].id
                ]
             );
@@ -397,13 +335,11 @@ exports.importLeadsFromExcel = async (req, res) => {
 
             await db.query(
                `INSERT INTO leads
-                (name, phone, email, source, status, assigned_to, created_by, project_id)
-                VALUES (?,?,?,?,?,?,?,?)`,
+                (name, phone,status, assigned_to, created_by, project_id)
+                VALUES (?,?,?,?,?,?)`,
                [
                   Name,
                   Phone,
-                  Email,
-                  Source,
                   "New",
                   null,
                   req.user.id,
@@ -448,8 +384,6 @@ exports.exportLeads = async (req, res) => {
          SELECT 
             leads.name AS Name,
             leads.phone AS Phone,
-            leads.email AS Email,
-            leads.source AS Source,
             leads.status AS Status,
             IFNULL(p.name, 'Unassigned') AS Project,
             u1.name AS Assigned_To,
